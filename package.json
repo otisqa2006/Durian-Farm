@@ -12,6 +12,7 @@
     "@serwist/next": "^9.5.11",
     "@supabase/supabase-js": "^2.106.1",
     "@types/uuid": "^10.0.0",
+    "@vercel/speed-insights": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.3.0",
