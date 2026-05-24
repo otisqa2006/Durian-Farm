@@ -16,7 +16,22 @@ import { useDebts } from '@/hooks/useDebts';
 import { useFunds } from '@/hooks/useFunds';
 import { formatCurrency, formatDate, toDateInputValue } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
-import type { Debt, DebtType } from '@/types';
+import NumericInput from '@/components/ui/NumericInput';
+import type { DebtType } from '@/types';
+
+// Matches shape returned by getDebts() action
+type DBDebt = {
+  id: string;
+  creditor: string;
+  type: DebtType;
+  principalAmount: number;
+  remainingAmount: number;
+  interestRate?: number;
+  status: 'active' | 'paid';
+  startDate: Date;
+  dueDate?: Date;
+  note: string;
+};
 import { useApp } from '@/providers/AppProvider';
 
 // ─── Add Debt Form ─────────────────────────────────────────────
@@ -79,7 +94,7 @@ export default function DebtManagementPage() {
   const [submittingDebt, setSubmittingDebt] = useState(false);
 
   // ── Payment modal ────────────────────────────────────────────
-  const [payingDebt, setPayingDebt] = useState<Debt | null>(null);
+  const [payingDebt, setPayingDebt] = useState<DBDebt | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>(initialPaymentForm);
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
@@ -146,7 +161,7 @@ export default function DebtManagementPage() {
     }
   };
 
-  const openPaymentModal = (debt: Debt) => {
+  const openPaymentModal = (debt: DBDebt) => {
     setPayingDebt(debt);
     setPaymentForm({
       ...initialPaymentForm,
@@ -210,7 +225,7 @@ export default function DebtManagementPage() {
   };
 
   // ── Progress helper ──────────────────────────────────────────
-  const getProgress = (debt: Debt) => {
+  const getProgress = (debt: DBDebt) => {
     if (debt.principalAmount === 0) return 0;
     return ((debt.principalAmount - debt.remainingAmount) / debt.principalAmount) * 100;
   };
@@ -442,13 +457,12 @@ export default function DebtManagementPage() {
           {/* Principal */}
           <div>
             <label className="block text-sm font-medium text-muted mb-1.5">Số tiền gốc (₫)</label>
-            <input
-              type="number"
-              className="input-field"
-              placeholder="0"
-              min={0}
+            <NumericInput
               value={debtForm.principalAmount}
-              onChange={(e) => setDebtForm(prev => ({ ...prev, principalAmount: e.target.value }))}
+              onChange={(val) => setDebtForm(prev => ({ ...prev, principalAmount: val }))}
+              className="input-field"
+              placeholder="Nhập số tiền gốc..."
+              required
             />
           </div>
 
@@ -541,14 +555,12 @@ export default function DebtManagementPage() {
             {/* Principal paid */}
             <div>
               <label className="block text-sm font-medium text-muted mb-1.5">Gốc trả (₫)</label>
-              <input
-                type="number"
-                className="input-field"
-                placeholder="0"
-                min={0}
-                max={payingDebt.remainingAmount}
+              <NumericInput
                 value={paymentForm.principalPaid}
-                onChange={(e) => setPaymentForm(prev => ({ ...prev, principalPaid: e.target.value }))}
+                onChange={(val) => setPaymentForm(prev => ({ ...prev, principalPaid: val }))}
+                className="input-field"
+                placeholder="Nhập số gốc trả..."
+                required
               />
             </div>
 
@@ -556,13 +568,12 @@ export default function DebtManagementPage() {
             {payingDebt.type === 'bank' && (
               <div>
                 <label className="block text-sm font-medium text-muted mb-1.5">Lãi trả (₫)</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  placeholder="0"
-                  min={0}
+                <NumericInput
                   value={paymentForm.interestPaid}
-                  onChange={(e) => setPaymentForm(prev => ({ ...prev, interestPaid: e.target.value }))}
+                  onChange={(val) => setPaymentForm(prev => ({ ...prev, interestPaid: val }))}
+                  className="input-field"
+                  placeholder="Nhập số lãi trả..."
+                  required
                 />
               </div>
             )}

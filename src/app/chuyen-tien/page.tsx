@@ -9,17 +9,22 @@ import {
   Inbox,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import NumericInput from '@/components/ui/NumericInput';
 import { useFunds } from '@/hooks/useFunds';
 import { useTransfers } from '@/hooks/useTransfers';
 import { formatCurrency, formatDate, toDateInputValue } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 
+import { useApp } from '@/providers/AppProvider';
+
 export default function ChuyenTienPage() {
   const { user } = useAuth();
-  const canEdit = user?.role === 'admin' || user?.permissions?.canManageQuy;
+  const { selectedSeasonId, activeSeasonId } = useApp();
+  const isSeasonActive = selectedSeasonId === activeSeasonId;
+  const canEdit = (user?.role === 'admin' || user?.permissions?.can_manage_quy) && isSeasonActive;
 
-  const { funds, totalBalance } = useFunds();
-  const { transfers, addTransfer } = useTransfers();
+  const { funds, totalBalance } = useFunds(selectedSeasonId);
+  const { transfers, addTransfer } = useTransfers(selectedSeasonId);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -106,13 +111,13 @@ export default function ChuyenTienPage() {
 
     try {
       setIsSubmitting(true);
-      await addTransfer({
+      await addTransfer(
         fromFundId,
         toFundId,
-        amount: numAmount,
-        description: description.trim() || 'Chuyển tiền nội bộ',
-        date: new Date(date),
-      });
+        numAmount,
+        description.trim() || 'Chuyển tiền nội bộ',
+        new Date(date),
+      );
       setIsModalOpen(false);
       resetForm();
     } catch {
@@ -124,18 +129,20 @@ export default function ChuyenTienPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ===== Header ===== */}
-      <div className="flex items-center justify-between">
+      {/* ============ Header ============ */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl gradient-info flex items-center justify-center shadow-lg">
+              <ArrowLeftRight className="w-5 h-5 text-white" />
+            </div>
             Chuyển tiền Nội bộ
           </h1>
-          <p className="text-sm text-muted mt-1">
-            Quản lý chuyển tiền giữa các quỹ • Tổng quỹ:{' '}
-            <span className="font-mono-num text-white">
-              {formatCurrency(totalBalance)}
-            </span>
-          </p>
+          {!isSeasonActive && (
+            <p className="text-warning text-xs mt-2 bg-warning/10 inline-block px-2 py-1 rounded">
+              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
+            </p>
+          )}
         </div>
         {canEdit && (
           <button className="btn btn-primary" onClick={openModal}>
@@ -290,13 +297,11 @@ export default function ChuyenTienPage() {
             <label className="block text-sm font-medium text-muted mb-1.5">
               Số tiền
             </label>
-            <input
-              type="number"
-              className="input-field font-mono-num"
-              placeholder="0"
-              min={0}
+            <NumericInput
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(val) => setAmount(val)}
+              className="input-field font-mono-num"
+              placeholder="Nhập số tiền..."
             />
             {sourceFund && (
               <p className="text-xs text-muted mt-1">

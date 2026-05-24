@@ -5,17 +5,11 @@ import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomNav from './BottomNav';
-import { seedDefaultData } from '@/lib/db';
 import { NAV_ITEMS } from '@/lib/constants';
 import { AuthProvider } from '@/hooks/useAuth';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
-  // Seed default data on first load
-  useEffect(() => {
-    seedDefaultData();
-  }, []);
 
   const isAuthRoute = pathname === '/login' || pathname === '/register';
 

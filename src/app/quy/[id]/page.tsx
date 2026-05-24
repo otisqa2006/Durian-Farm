@@ -1,31 +1,83 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Wallet, Calendar, User, ArrowRightLeft, TrendingUp, TrendingDown, Inbox, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { ArrowLeft, Wallet, Calendar, User, ArrowRightLeft, TrendingUp, TrendingDown, Inbox, ArrowUpRight, ArrowDownLeft, AlertTriangle } from 'lucide-react';
 import { useFundById, useFunds } from '@/hooks/useFunds';
 import { useTransactions } from '@/hooks/useTransactions';
-import { getTransfersByFund } from '@/lib/db';
+import { getTransfers } from '@/actions/transfers';
+import { getUsers } from '@/actions/users';
+import useSWR from 'swr';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Transfer } from '@/types';
+
+import Modal from '@/components/ui/Modal';
+import { useApp } from '@/providers/AppProvider';
+import NumericInput from '@/components/ui/NumericInput';
 
 export default function FundDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
-  const fund = useFundById(id);
-  const { funds } = useFunds();
-  const { transactions, totalIncome, totalExpense } = useTransactions(id);
-  const transfers = useLiveQuery(
-    () => getTransfersByFund(id),
-    [id],
-    [] as Transfer[]
+  const { toast, selectedSeasonId, activeSeasonId } = useApp();
+  const isSeasonActive = selectedSeasonId === activeSeasonId;
+
+  const fund = useFundById(id, selectedSeasonId);
+  const { funds } = useFunds(selectedSeasonId);
+  const { transactions, totalIncome, totalExpense, addTransaction } = useTransactions(id, selectedSeasonId);
+  const { data: allTransfers } = useSWR(
+    selectedSeasonId ? ['transfers', selectedSeasonId] : null, 
+    ([_, sid]) => getTransfers(sid as string)
   );
+  const transfers = (allTransfers || []).filter(t => t.fromFundId === id || t.toFundId === id);
 
   // Helper to resolve fund name by ID
   const getFundName = (fundId: string): string => {
     const f = funds.find(fund => fund.id === fundId);
     return f?.name ?? 'Quỹ không xác định';
+  };
+
+  const { data: allUsers } = useSWR('users', getUsers);
+  const getUserName = (userId: string) => {
+    return allUsers?.find(u => u.id === userId)?.name || userId;
+  };
+
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [adjustAmount, setAdjustAmount] = useState<string>('');
+  const [adjustReason, setAdjustReason] = useState<string>('');
+  const [isAdjusting, setIsAdjusting] = useState(false);
+
+  const handleAdjust = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustAmount || !adjustReason.trim()) {
+      toast('Vui lòng nhập số tiền và lý do cân đối.', 'error');
+      return;
+    }
+    const amountNum = parseFloat(adjustAmount);
+    if (isNaN(amountNum) || amountNum === 0) {
+      toast('Số tiền không hợp lệ (phải khác 0).', 'error');
+      return;
+    }
+
+    setIsAdjusting(true);
+    try {
+      await addTransaction({
+        type: amountNum > 0 ? 'income' : 'expense',
+        amount: Math.abs(amountNum),
+        category: 'Khác',
+        fundId: id,
+        description: `Cân đối quỹ: ${adjustReason.trim()}`,
+        date: new Date(),
+      });
+      toast('Cân đối thành công!', 'success');
+      setIsAdjustModalOpen(false);
+      setAdjustAmount('');
+      setAdjustReason('');
+    } catch (err) {
+      console.error(err);
+      toast('Lỗi khi cân đối quỹ.', 'error');
+    } finally {
+      setIsAdjusting(false);
+    }
   };
 
   // Loading state
@@ -74,21 +126,21 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           {/* Left: Fund info */}
           <div className="flex items-start gap-4">
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${
-              fund.type === 'master' ? 'gradient-primary' : 'gradient-accent'
+              fund.isMaster ? 'gradient-primary' : 'gradient-accent'
             }`}>
               <Wallet className="w-7 h-7 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold">{fund.name}</h1>
-                <span className={`badge ${fund.type === 'master' ? 'badge-bank' : 'badge-external'}`}>
-                  {fund.type === 'master' ? 'Quỹ tổng' : 'Quỹ phụ'}
+                <span className={`badge ${fund.isMaster ? 'badge-bank' : 'badge-external'}`}>
+                  {fund.isMaster ? 'Quỹ tổng' : 'Quỹ phụ'}
                 </span>
               </div>
               <div className="flex items-center gap-4 text-muted text-sm">
                 <span className="flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" />
-                  {fund.holder}
+                   {getUserName(fund.holderId)}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" />
@@ -108,7 +160,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         {/* Quick stats row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-border">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-border">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-income/15 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-income" />
@@ -136,8 +188,27 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               <p className="text-lg font-semibold font-mono-num">{transfers.length}</p>
             </div>
           </div>
+          
+          {/* Action Button */}
+          {fund.isMaster && isSeasonActive && (
+            <div className="flex-shrink-0 self-start md:self-center mt-4 md:mt-0">
+              <button 
+                onClick={() => setIsAdjustModalOpen(true)}
+                className="btn btn-outline border-primary/30 text-primary-light hover:bg-primary/20"
+              >
+                Cân đối thủ công
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {!isSeasonActive && (
+        <div className="bg-warning/20 border border-warning/50 text-warning px-4 py-3 rounded-xl flex items-center gap-3 animate-fade-in">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-medium">Bạn đang xem dữ liệu của mùa vụ lưu trữ. Dữ liệu chỉ có thể xem, không thể chỉnh sửa.</p>
+        </div>
+      )}
 
       {/* ==================== Transaction History ==================== */}
       <div className="glass-card p-6">
@@ -262,6 +333,66 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
       </div>
+
+      {/* Adjust Modal */}
+      <Modal
+        isOpen={isAdjustModalOpen}
+        onClose={() => setIsAdjustModalOpen(false)}
+        title="Cân Đối Quỹ Thủ Công"
+      >
+        <form onSubmit={handleAdjust} className="space-y-4">
+          <div className="p-3 bg-info/10 text-info border border-info/20 rounded-lg text-sm mb-4">
+            Tính năng này tạo ra một giao dịch Khác để điều chỉnh số dư khớp với thực tế. <br/>
+            - Nhập số <b>Dương</b> để <b>tăng</b> quỹ. <br/>
+            - Nhập số <b>Âm</b> (VD: -500000) để <b>giảm</b> quỹ.
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1.5">
+              Số tiền điều chỉnh <span className="text-danger">*</span>
+            </label>
+            <NumericInput
+              value={adjustAmount}
+              onChange={(val) => setAdjustAmount(val)}
+              placeholder="Ví dụ: -500.000 hoặc 500.000"
+              className="input-field font-mono-num"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1.5">
+              Lý do cân đối <span className="text-danger">*</span>
+            </label>
+            <input
+              type="text"
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              placeholder="VD: Nhập nhầm giao dịch tuần trước"
+              className="input-field"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setIsAdjustModalOpen(false)}
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={isAdjusting}
+              className="btn btn-primary btn-sm"
+            >
+              {isAdjusting ? 'Đang lưu...' : 'Xác nhận Cân đối'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

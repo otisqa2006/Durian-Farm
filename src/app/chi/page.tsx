@@ -1,60 +1,105 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Plus, TrendingDown, Trash2, Receipt, AlertCircle } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Plus, TrendingDown, Trash2, Receipt, AlertCircle, Filter, Wallet, ChevronDown } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useFunds } from '@/hooks/useFunds';
 import { EXPENSE_CATEGORIES } from '@/lib/constants';
 import { formatCurrency, formatDate, toDateInputValue } from '@/lib/utils';
 import type { ExpenseCategory } from '@/types';
 import Modal from '@/components/ui/Modal';
+import NumericInput from '@/components/ui/NumericInput';
 import { useAuth } from '@/hooks/useAuth';
 import { useApp } from '@/providers/AppProvider';
 
 export default function ChiPage() {
   const { user } = useAuth();
-  const { toast, confirm } = useApp();
-  const canEdit = user?.role === 'admin' || user?.permissions?.canManageChi;
+  const { toast, confirm, selectedSeasonId, activeSeasonId } = useApp();
+  const isSeasonActive = selectedSeasonId === activeSeasonId;
+  const canEdit = (user?.role === 'admin' || user?.permissions?.can_manage_chi) && isSeasonActive;
 
-  const { expenseTransactions, totalExpense, addTransaction, removeTransaction } = useTransactions();
-  const { funds } = useFunds();
+  const { expenseTransactions, totalExpense, addTransaction, addMultipleTransactions, updateTransaction, removeTransaction } = useTransactions(undefined, selectedSeasonId);
+  const { funds } = useFunds(selectedSeasonId);
+
+  // View state
+  const [selectedViewFundId, setSelectedViewFundId] = useState<string>('');
+
+  useEffect(() => {
+    if (funds.length > 0 && !selectedViewFundId) {
+      const masterFund = funds.find((f) => f.isMaster);
+      if (masterFund) {
+        setSelectedViewFundId(masterFund.id);
+      } else {
+        setSelectedViewFundId(funds[0].id);
+      }
+    }
+  }, [funds, selectedViewFundId]);
+
+  const selectedViewFund = funds.find((f) => f.id === selectedViewFundId);
+  const isMasterFund = selectedViewFund?.isMaster === true;
+  const canEditCurrentView = canEdit && !isMasterFund;
+
+  const displayedTransactions = useMemo(() => {
+    if (!selectedViewFundId) return [];
+    if (isMasterFund) return expenseTransactions; // Quỹ tổng xem được tất cả
+    return expenseTransactions.filter((t) => t.fundId === selectedViewFundId);
+  }, [expenseTransactions, selectedViewFundId, isMasterFund]);
+
+  const displayedTotalExpense = useMemo(() => {
+    return displayedTransactions.reduce((sum, t) => sum + t.amount, 0);
+  }, [displayedTransactions]);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Bulk import state
+  const [bulkText, setBulkText] = useState('');
+
   // Form state
-  const [category, setCategory] = useState<ExpenseCategory>(EXPENSE_CATEGORIES[0].value);
+  const [category, setCategory] = useState<ExpenseCategory>('Sinh hoạt' as ExpenseCategory);
   const [amount, setAmount] = useState('');
   const [fundId, setFundId] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(toDateInputValue(new Date()));
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
 
   // Category totals for summary cards
   const categoryTotals = useMemo(() => {
     return EXPENSE_CATEGORIES.map((cat) => {
-      const total = expenseTransactions
-        .filter((t) => t.category === cat.value)
-        .reduce((sum, t) => sum + t.amount, 0);
-      return { ...cat, total };
+      const categoryTransactions = displayedTransactions.filter((t) => t.category === cat.value);
+      const total = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
+      return { ...cat, total, count: categoryTransactions.length };
     });
-  }, [expenseTransactions]);
+  }, [displayedTransactions]);
+
+  const canEditTransaction = (txn: any) => {
+    if (!isSeasonActive) return false;
+    if (txn.description?.startsWith('Cân đối quỹ:')) return false;
+    if (user?.role !== 'admin' && !user?.permissions?.can_manage_chi) return false;
+    const txnFund = funds.find(f => f.id === txn.fundId);
+    if (!txnFund || txnFund.isMaster) return false;
+    return true;
+  };
 
   const resetForm = () => {
-    setCategory(EXPENSE_CATEGORIES[0].value);
+    setCategory('Sinh hoạt' as ExpenseCategory);
     setAmount('');
     setFundId('');
     setDescription('');
     setDate(toDateInputValue(new Date()));
     setFormError('');
+    setEditingTransactionId(null);
   };
 
   const handleOpenModal = () => {
-    if (!canEdit) return;
+    if (!canEditCurrentView) return;
     resetForm();
-    // Default to first fund if available
-    if (funds.length > 0) {
+    if (selectedViewFundId && !isMasterFund) {
+      setFundId(selectedViewFundId);
+    } else if (funds.length > 0) {
       setFundId(funds[0].id);
     }
     setIsModalOpen(true);
@@ -62,6 +107,7 @@ export default function ChiPage() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
+    setIsBulkModalOpen(false);
     setFormError('');
   };
 
@@ -76,32 +122,49 @@ export default function ChiPage() {
       return;
     }
 
-    if (!fundId) {
-      setFormError('Vui lòng chọn quỹ chi.');
-      return;
-    }
-
-    // Check fund balance
-    const selectedFund = funds.find((f) => f.id === fundId);
-    if (selectedFund && selectedFund.balance < parsedAmount) {
-      setFormError(
-        `Số dư quỹ "${selectedFund.name}" không đủ. Hiện có: ${formatCurrency(selectedFund.balance)}, cần: ${formatCurrency(parsedAmount)}.`
-      );
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      await addTransaction({
-        type: 'expense',
-        amount: parsedAmount,
-        category,
-        fundId,
-        description: description.trim(),
-        date: new Date(date),
-      });
-      toast('Thêm khoản chi thành công!', 'success');
-      handleCloseModal();
+      setIsSubmitting(true);
+
+      if (editingTransactionId) {
+        // Edit mode
+        const txn = expenseTransactions.find(t => t.id === editingTransactionId);
+        if (!txn || !canEditTransaction(txn)) return;
+        
+        await updateTransaction(editingTransactionId, {
+          amount: parsedAmount,
+          category,
+          description,
+          date: new Date(date)
+        });
+        toast('Đã cập nhật khoản chi', 'success');
+      } else {
+        // Add mode
+        if (!fundId) {
+          setFormError('Vui lòng chọn quỹ chi.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const selectedFund = funds.find((f) => f.id === fundId);
+        if (selectedFund && selectedFund.balance < parsedAmount) {
+          setFormError(`Quỹ không đủ tiền. Đang có: ${formatCurrency(selectedFund.balance)}`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        await addTransaction({
+          type: 'expense',
+          amount: parsedAmount,
+          category,
+          fundId,
+          description,
+          date: new Date(date)
+        });
+        toast('Đã thêm khoản chi', 'success');
+      }
+      
+      setIsModalOpen(false);
+      resetForm();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Có lỗi xảy ra khi thêm khoản chi.';
       setFormError(message);
@@ -110,12 +173,101 @@ export default function ChiPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleBulkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!canEdit) return;
+    if (!fundId) {
+      setFormError('Vui lòng chọn quỹ chi.');
+      return;
+    }
+    setFormError('');
+    setIsSubmitting(true);
+
+    try {
+      const lines = bulkText.split('\n');
+      let currentDate = new Date();
+      const results = [];
+      let totalAmount = 0;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        
+        // Match date: "21/5:" or "21/5"
+        const dateMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2}):?$/);
+        if (dateMatch) {
+          const day = parseInt(dateMatch[1]);
+          const month = parseInt(dateMatch[2]);
+          const year = new Date().getFullYear();
+          currentDate = new Date(year, month - 1, day);
+          continue;
+        }
+        
+        // Match expense: "Đồ ăn, nước: 85k"
+        const expenseMatch = trimmed.match(/^(.*?):\s*([\d.,]+)\s*(k|K|m|M|đ|d)?$/i);
+        if (expenseMatch) {
+          const desc = expenseMatch[1].trim();
+          let amountStr = expenseMatch[2].replace(/,/g, '.');
+          let amountVal = parseFloat(amountStr);
+          const unit = (expenseMatch[3] || '').toLowerCase();
+          if (unit === 'k') amountVal *= 1000;
+          if (unit === 'm') amountVal *= 1000000;
+          
+          results.push({
+            type: 'expense' as const,
+            amount: amountVal,
+            category: 'Sinh hoạt' as ExpenseCategory, // Mặc định Sinh hoạt
+            fundId,
+            description: desc,
+            date: new Date(currentDate)
+          });
+          totalAmount += amountVal;
+        }
+      }
+
+      if (results.length === 0) {
+        setFormError('Không tìm thấy khoản chi nào hợp lệ trong văn bản.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const selectedFund = funds.find((f) => f.id === fundId);
+      if (selectedFund && selectedFund.balance < totalAmount) {
+        setFormError(`Quỹ không đủ. Tổng: ${formatCurrency(totalAmount)}, dư quỹ: ${formatCurrency(selectedFund.balance)}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      await addMultipleTransactions(results);
+      toast(`Đã thêm ${results.length} khoản chi thành công!`, 'success');
+      setIsBulkModalOpen(false);
+      setBulkText('');
+    } catch (error: any) {
+      setFormError(error.message || 'Lỗi khi nhập hàng loạt');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEdit = (txn: any) => {
+    if (!canEditTransaction(txn)) return;
+    resetForm();
+    setEditingTransactionId(txn.id);
+    setCategory(txn.category);
+    setAmount(txn.amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'));
+    setFundId(txn.fundId);
+    setDescription(txn.description);
+    setDate(toDateInputValue(new Date(txn.date)));
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (e: React.MouseEvent, txn: any) => {
+    e.stopPropagation();
+    if (!canEditTransaction(txn)) return;
     const ok = await confirm('Bạn có chắc chắn muốn xoá khoản chi này?');
     if (!ok) return;
     try {
-      await removeTransaction(id);
+      await removeTransaction(txn.id);
       toast('Đã xoá khoản chi', 'success');
     } catch {
       toast('Có lỗi xảy ra khi xoá khoản chi.', 'error');
@@ -135,7 +287,7 @@ export default function ChiPage() {
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      {/* ============ Header ============ */}
+      {/* ── Header ─────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -144,43 +296,98 @@ export default function ChiPage() {
             </div>
             Quản lý Dòng Chi
           </h1>
-          <p className="text-muted mt-1 text-sm">Ghi nhận và theo dõi các khoản chi tiêu</p>
+          {!isSeasonActive && (
+            <p className="text-warning text-xs mt-2 bg-warning/10 inline-block px-2 py-1 rounded">
+              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
+            </p>
+          )}
+          {isSeasonActive && <p className="text-muted mt-1 text-sm">Ghi nhận và theo dõi các khoản chi tiêu</p>}
         </div>
-        {canEdit && (
-          <button onClick={handleOpenModal} className="btn btn-primary">
-            <Plus className="w-4 h-4" />
-            Thêm khoản chi
-          </button>
-        )}
+        
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+          <div className="relative inline-flex">
+            <div className="btn btn-secondary flex items-center justify-between min-w-[140px] pointer-events-none pr-9">
+              <div className="flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-muted" />
+                <span className="truncate max-w-[120px]">{selectedViewFund?.name || 'Chọn quỹ'} {isMasterFund && '(Tổng)'}</span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-muted absolute right-3" />
+            </div>
+            <select
+              value={selectedViewFundId}
+              onChange={(e) => setSelectedViewFundId(e.target.value)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            >
+              {funds.map((f) => (
+                <option key={f.id} value={f.id} className="bg-card text-white">
+                  {f.name} {f.isMaster && '(Tổng)'}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {canEdit && (
+            <div className="flex gap-2">
+              <button 
+                onClick={(e) => {
+                  if (isMasterFund) { e.preventDefault(); return; }
+                  resetForm();
+                  if (selectedViewFundId && !isMasterFund) {
+                    setFundId(selectedViewFundId);
+                  } else if (funds.length > 0) setFundId(funds[0].id);
+                  setIsBulkModalOpen(true);
+                }} 
+                className={`btn btn-secondary whitespace-nowrap ${isMasterFund ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                disabled={isMasterFund}
+                aria-disabled={isMasterFund}
+              >
+                <Receipt className="w-4 h-4 hidden sm:block" />
+                Nhập Text
+              </button>
+              <button 
+                onClick={(e) => {
+                  if (isMasterFund) { e.preventDefault(); return; }
+                  handleOpenModal();
+                }} 
+                className={`btn btn-primary whitespace-nowrap ${isMasterFund ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                disabled={isMasterFund}
+                aria-disabled={isMasterFund}
+              >
+                <Plus className="w-4 h-4 hidden sm:block" />
+                Thêm khoản chi
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ============ Summary Cards ============ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 stagger-children">
         {/* Total expense card */}
-        <div className="gradient-danger rounded-2xl p-5 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-white/80">Tổng chi</span>
-            <TrendingDown className="w-5 h-5 text-white/60" />
+        <div className="gradient-danger rounded-xl p-3 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-white/90 truncate pr-2">Tổng chi ({selectedViewFund?.name || 'Tất cả'})</span>
+            <TrendingDown className="w-3.5 h-3.5 text-white/70 flex-shrink-0" />
           </div>
-          <p className="text-2xl font-bold font-mono-num">{formatCurrency(totalExpense)}</p>
-          <p className="text-xs text-white/60 mt-1">{expenseTransactions.length} giao dịch</p>
+          <p className="text-lg font-bold font-mono-num truncate">{formatCurrency(displayedTotalExpense)}</p>
+          <p className="text-[10px] text-white/70 mt-0.5">{displayedTransactions.length} giao dịch</p>
         </div>
 
         {/* Per-category cards */}
         {categoryTotals.map((cat) => (
-          <div key={cat.value} className="glass-card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted">{cat.label}</span>
+          <div key={cat.value} className="glass-card rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-muted truncate pr-2">{cat.label}</span>
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: cat.color }}
               />
             </div>
-            <p className="text-xl font-bold text-white font-mono-num">
+            <p className="text-base font-bold text-white font-mono-num truncate">
               {formatCurrency(cat.total)}
             </p>
-            <p className="text-xs text-muted mt-1">
-              {expenseTransactions.filter((t) => t.category === cat.value).length} giao dịch
+            <p className="text-[10px] text-muted mt-0.5">
+              {cat.count} giao dịch
             </p>
           </div>
         ))}
@@ -203,8 +410,8 @@ export default function ChiPage() {
             <div className="p-4 rounded-2xl bg-card mb-4">
               <TrendingDown className="w-8 h-8 text-muted" />
             </div>
-            <p className="text-white font-medium mb-1">Chưa có khoản chi nào</p>
-            <p className="text-muted text-sm">Nhấn &quot;Thêm khoản chi&quot; để bắt đầu ghi nhận</p>
+            <p className="text-white font-medium mb-1">Chưa có khoản chi nào trong quỹ này</p>
+            {canEditCurrentView && <p className="text-muted text-sm">Nhấn &quot;Thêm khoản chi&quot; để bắt đầu ghi nhận</p>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -220,10 +427,18 @@ export default function ChiPage() {
                 </tr>
               </thead>
               <tbody>
-                {expenseTransactions.map((txn) => {
+                {displayedTransactions.map((txn) => {
                   const catInfo = getCategoryInfo(txn.category);
                   return (
-                    <tr key={txn.id}>
+                    <tr 
+                      key={txn.id} 
+                      className={`border-b border-border/50 transition-colors ${canEditTransaction(txn) ? 'cursor-pointer hover:bg-white/5' : ''}`}
+                      onClick={() => {
+                        if (canEditTransaction(txn)) {
+                          handleEdit(txn);
+                        }
+                      }}
+                    >
                       <td className="whitespace-nowrap">{formatDate(txn.date)}</td>
                       <td>
                         <span
@@ -250,13 +465,15 @@ export default function ChiPage() {
                       </td>
                       {canEdit && (
                         <td className="text-center">
-                          <button
-                            onClick={() => handleDelete(txn.id)}
-                            className="btn btn-ghost btn-sm text-muted hover:text-danger"
-                            title="Xoá"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!txn.description?.startsWith('Cân đối quỹ:') && (
+                            <button
+                              onClick={(e) => handleDelete(e, txn)}
+                              className="btn btn-ghost btn-sm text-muted hover:text-danger"
+                              title="Xoá"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -269,7 +486,11 @@ export default function ChiPage() {
       </div>
 
       {/* ============ Add Expense Modal ============ */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Thêm khoản chi">
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={handleCloseModal} 
+        title={editingTransactionId ? "Chỉnh sửa khoản chi" : "Thêm khoản chi"}
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Error message */}
           {formError && (
@@ -299,37 +520,16 @@ export default function ChiPage() {
           {/* Amount */}
           <div>
             <label className="block text-sm font-medium text-muted mb-1.5">Số tiền (₫)</label>
-            <input
-              type="number"
+            <NumericInput
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(val) => setAmount(val)}
               className="input-field font-mono-num"
               placeholder="Nhập số tiền..."
-              min={1000}
-              step={1000}
               required
             />
           </div>
 
-          {/* Fund */}
-          <div>
-            <label className="block text-sm font-medium text-muted mb-1.5">Quỹ chi</label>
-            <select
-              value={fundId}
-              onChange={(e) => setFundId(e.target.value)}
-              className="input-field"
-              required
-            >
-              <option value="" disabled>
-                Chọn quỹ...
-              </option>
-              {funds.map((fund) => (
-                <option key={fund.id} value={fund.id}>
-                  {fund.name} ({formatCurrency(fund.balance)})
-                </option>
-              ))}
-            </select>
-          </div>
+
 
           {/* Description */}
           <div>
@@ -361,7 +561,52 @@ export default function ChiPage() {
               Huỷ
             </button>
             <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Đang lưu...' : 'Thêm khoản chi'}
+              {isSubmitting ? 'Đang lưu...' : (editingTransactionId ? 'Sửa khoản chi' : 'Thêm khoản chi')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ============ Bulk Text Import Modal ============ */}
+      <Modal isOpen={isBulkModalOpen} onClose={handleCloseModal} title="Nhập hàng loạt từ Text">
+        <form onSubmit={handleBulkSubmit} className="space-y-4">
+          <div className="p-3 bg-info/10 border border-info/20 rounded-lg text-sm text-info/90">
+            <p className="font-semibold mb-1">Cú pháp nhập mẫu:</p>
+            <pre className="text-xs bg-black/20 p-2 rounded mt-1 font-mono">
+              21/5:{'\n'}
+              Đồ ăn, nước: 85k{'\n'}
+              22/5:{'\n'}
+              Đồ ăn sáng: 40k{'\n'}
+              Tiền điện: 445k
+            </pre>
+          </div>
+
+          {formError && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-danger/10 border border-danger/30 text-sm text-red-400">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+
+
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1.5">Nội dung Text</label>
+            <textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              className="input-field min-h-[150px] font-mono text-sm"
+              placeholder="Dán nội dung vào đây..."
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={handleCloseModal} className="btn btn-secondary">
+              Huỷ
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting || !bulkText}>
+              {isSubmitting ? 'Đang xử lý...' : 'Lưu tất cả'}
             </button>
           </div>
         </form>

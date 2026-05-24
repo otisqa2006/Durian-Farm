@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import { getSeasons, type Season } from '@/actions/seasons';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -21,6 +22,11 @@ interface ConfirmState {
 interface AppContextType {
   toast: (message: string, type?: ToastType) => void;
   confirm: (message: string) => Promise<boolean>;
+  seasons: Season[];
+  activeSeasonId: string | null;
+  selectedSeasonId: string | null;
+  setSelectedSeasonId: (id: string | null) => void;
+  refreshSeasons: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -40,6 +46,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isOpen: false,
     message: '',
   });
+
+  // Seasons State
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [activeSeasonId, setActiveSeasonId] = useState<string | null>(null);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
+
+  const refreshSeasons = useCallback(async () => {
+    try {
+      const data = await getSeasons();
+      setSeasons(data);
+      const active = data.find(s => s.isActive);
+      if (active) {
+        setActiveSeasonId(active.id);
+        // Nếu user chưa chọn season nào, tự động chọn season active
+        setSelectedSeasonId(prev => prev || active.id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshSeasons();
+  }, [refreshSeasons]);
 
   const toast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -68,7 +98,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ toast, confirm }}>
+    <AppContext.Provider value={{ 
+      toast, 
+      confirm,
+      seasons,
+      activeSeasonId,
+      selectedSeasonId,
+      setSelectedSeasonId,
+      refreshSeasons
+    }}>
       {children}
 
       {/* --- Toasts Container --- */}

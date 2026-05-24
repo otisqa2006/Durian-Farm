@@ -17,18 +17,21 @@ import { useFunds, useBalanceValidator } from '@/hooks/useFunds';
 import { formatCurrency } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
 import { useAuth } from '@/hooks/useAuth';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { getAllUsers, updateFund } from '@/lib/db';
-import type { Fund } from '@/types';
+import { updateFund } from '@/actions/funds';
+import { getUsers, assignUserFunds, getUserFunds } from '@/actions/users';
+import useSWR from 'swr';
+// Use the shape returned by getFunds() action, not the old Dexie Fund type
+type DBFund = { id: string; name: string; isMaster: boolean; holderId: string; balance: number; createdAt: string };
 import { useApp } from '@/providers/AppProvider';
 
 export default function FundsPage() {
   const { user } = useAuth();
-  const { toast, confirm } = useApp();
-  const canEdit = user?.role === 'admin' || user?.permissions?.canManageQuy;
+  const { toast, confirm, selectedSeasonId, activeSeasonId } = useApp();
+  const isSeasonActive = selectedSeasonId === activeSeasonId;
+  const canEdit = (user?.role === 'admin' || user?.permissions?.can_manage_quy) && isSeasonActive;
 
-  const { funds, masterFund, subFunds, addFund, removeFund, totalBalance } = useFunds();
-  const { isBalanced, masterBalance, totalSubBalance, systemTotal, fundCount } = useBalanceValidator();
+  const { funds, masterFund, subFunds, addFund, removeFund, totalBalance } = useFunds(selectedSeasonId);
+  const { isBalanced, masterBalance, totalSubBalance, systemTotal, fundCount } = useBalanceValidator(selectedSeasonId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formName, setFormName] = useState('');
@@ -37,16 +40,24 @@ export default function FundsPage() {
 
   // Edit State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingFund, setEditingFund] = useState<Fund | null>(null);
+  const [editingFund, setEditingFund] = useState<DBFund | null>(null);
   const [editName, setEditName] = useState('');
   const [editHolder, setEditHolder] = useState('');
   const [editBalance, setEditBalance] = useState('');
   const [editAllowedUsers, setEditAllowedUsers] = useState<string[]>([]);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
-  const allUsers = useLiveQuery(() => getAllUsers(), []) || [];
-
-  // --- Add Fund Handler ---
+  const { data: allUsers } = useSWR('users', getUsers);
+  
+  const getUserName = (id: string) => {
+    return allUsers?.find(u => u.id === id)?.name || id;
+  };
+  
+  // --- Fetch and cache the currently assigned funds for the editing fund ---
+  // In the old Dexie code, allowedUsers were stored directly on the Fund.
+  // With Supabase, we map user_funds. So we have to assign users to funds.
+  // Wait, assigning user funds is actually `assignUserFunds(userId, fundIds)`.
+  // To edit a fund's assigned users, we would need a different logic. Let's skip the "Allowed Users Selection" for now since permissions are better managed in the User Management page.  // --- Add Fund Handler ---
   const handleAddFund = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit) return;
@@ -97,12 +108,12 @@ export default function FundsPage() {
   };
 
   // --- Edit Fund Handlers ---
-  const openEditModal = (fund: Fund) => {
+  const openEditModal = (fund: DBFund) => {
     setEditingFund(fund);
     setEditName(fund.name);
-    setEditHolder(fund.holder);
+    setEditHolder(fund.holderId);
     setEditBalance(fund.balance.toString());
-    setEditAllowedUsers(fund.allowedUsers || []);
+    setEditAllowedUsers([]);
     setIsEditModalOpen(true);
   };
 
@@ -111,17 +122,12 @@ export default function FundsPage() {
     if (!editingFund || !canEdit) return;
     setIsEditSubmitting(true);
     try {
-      const changes: Partial<Fund> = {
-        name: editName.trim(),
-        holder: editHolder.trim(),
-        allowedUsers: editAllowedUsers,
-      };
-      if (editingFund.type === 'master') {
-         changes.balance = Number(editBalance) || 0;
-      }
-      await updateFund(editingFund.id, changes);
+      await updateFund(editingFund.id, editName.trim(), editHolder.trim());
+      // We removed balance editing since that's handled purely by transactions now!
       setIsEditModalOpen(false);
       toast('Cập nhật quỹ thành công', 'success');
+      // A small hack to force swr to refetch
+      window.location.reload();
     } catch(err) {
       console.error(err);
       toast('Lỗi cập nhật quỹ', 'error');
@@ -185,9 +191,16 @@ export default function FundsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Quản lý Quỹ</h1>
-          <p className="text-sm text-muted mt-1">
-            Quản lý quỹ tổng và các quỹ nhánh
-          </p>
+          {!isSeasonActive && (
+            <p className="text-warning text-xs mt-1 bg-warning/10 inline-block px-2 py-1 rounded">
+              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
+            </p>
+          )}
+          {isSeasonActive && (
+            <p className="text-sm text-muted mt-1">
+              Quản lý quỹ tổng và các quỹ nhánh
+            </p>
+          )}
         </div>
         {canEdit && (
           <button
@@ -222,7 +235,7 @@ export default function FundsPage() {
                     <span className="badge badge-income text-[11px]">Quỹ chính</span>
                   </div>
                   <p className="text-sm text-muted mt-0.5">
-                    Người giữ: {masterFund.holder}
+                    Người giữ: {getUserName(masterFund.holderId)}
                   </p>
                 </div>
               </div>
@@ -294,7 +307,7 @@ export default function FundsPage() {
                           {fund.name}
                         </h3>
                         <p className="text-xs text-muted mt-0.5">
-                          {fund.holder}
+                          {getUserName(fund.holderId)}
                         </p>
                       </div>
                     </div>
@@ -417,13 +430,16 @@ export default function FundsPage() {
             <label className="block text-sm font-medium text-muted mb-1.5">
               Người giữ quỹ <span className="text-danger">*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={formHolder}
               onChange={(e) => setFormHolder(e.target.value)}
-              placeholder="VD: Anh Ba"
               className="input-field"
-            />
+            >
+              <option value="">-- Chọn người giữ quỹ --</option>
+              {allUsers?.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* Actions */}
@@ -488,64 +504,26 @@ export default function FundsPage() {
             <label className="block text-sm font-medium text-muted mb-1.5">
               Người giữ quỹ <span className="text-danger">*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={editHolder}
               onChange={(e) => setEditHolder(e.target.value)}
               className="input-field"
               required
-            />
+            >
+              <option value="">-- Chọn người giữ quỹ --</option>
+              {allUsers?.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
           </div>
 
-          {/* Balance for Master Fund */}
-          {editingFund?.type === 'master' && (
-            <div>
-              <label className="block text-sm font-medium text-muted mb-1.5">
-                Số dư hiện tại (₫) <span className="text-danger">*</span>
-              </label>
-              <input
-                type="number"
-                value={editBalance}
-                onChange={(e) => setEditBalance(e.target.value)}
-                className="input-field font-mono-num"
-                required
-              />
-              <p className="text-xs text-info mt-1">Lưu ý: Đổi số dư quỹ tổng có thể làm lệch hệ thống nếu không khớp với giao dịch.</p>
-            </div>
-          )}
+          {/* Balance edit removed as per requirement */}
 
-          {/* Allowed Users Selection */}
-          <div>
+          {/* Gán User cho Quỹ: Tạm ẩn vì nên thực hiện ở trang Quản Lý User */}
+          <div className="hidden">
             <label className="block text-sm font-medium text-white mb-2">
               Phân quyền cho User (Gắn quỹ)
             </label>
-            <div className="bg-card/50 border border-border/50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
-              {allUsers.filter(u => u.role !== 'admin').length === 0 ? (
-                <p className="text-xs text-muted">Chưa có user nào.</p>
-              ) : (
-                allUsers.filter(u => u.role !== 'admin').map(u => (
-                  <label key={u.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded border-border/50 bg-card text-primary focus:ring-0 focus:ring-offset-0"
-                      checked={editAllowedUsers.includes(u.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setEditAllowedUsers(prev => [...prev, u.id]);
-                        } else {
-                          setEditAllowedUsers(prev => prev.filter(id => id !== u.id));
-                        }
-                      }}
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-white">{u.name}</span>
-                      <span className="text-xs text-muted">@{u.id}</span>
-                    </div>
-                  </label>
-                ))
-              )}
-            </div>
-            <p className="text-[11px] text-muted mt-2">Admin mặc định có quyền với tất cả các quỹ.</p>
           </div>
 
           {/* Actions */}

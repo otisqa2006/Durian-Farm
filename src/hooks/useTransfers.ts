@@ -1,31 +1,23 @@
 'use client';
 
-import { useLiveQuery } from 'dexie-react-hooks';
-import { getAllTransfers, createTransfer as dbCreateTransfer } from '@/lib/db';
-import type { Transfer } from '@/types';
-import { v4 as uuidv4 } from 'uuid';
+import useSWR from 'swr';
+import { getTransfers, addTransfer as serverAddTransfer } from '@/actions/transfers';
 import { useCallback } from 'react';
 
-export function useTransfers() {
-  const transfers = useLiveQuery(() => getAllTransfers(), [], []);
+export function useTransfers(seasonId?: string | null) {
+  const { data: allTransfers, mutate } = useSWR(
+    seasonId ? ['transfers', seasonId] : null, 
+    ([_, sid]) => getTransfers(sid as string)
+  );
+  const transfers = allTransfers || [];
 
   const addTransfer = useCallback(
-    async (data: {
-      fromFundId: string;
-      toFundId: string;
-      amount: number;
-      description: string;
-      date: Date;
-    }) => {
-      const transfer: Transfer = {
-        id: uuidv4(),
-        ...data,
-        createdAt: new Date(),
-      };
-      await dbCreateTransfer(transfer);
-      return transfer;
+    async (fromFundId: string, toFundId: string, amount: number, description: string, date: Date) => {
+      if (!seasonId) return;
+      await serverAddTransfer(fromFundId, toFundId, amount, description, date);
+      mutate();
     },
-    []
+    [mutate]
   );
 
   return { transfers, addTransfer };

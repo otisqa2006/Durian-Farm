@@ -2,39 +2,43 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
-import { getUserById } from '@/lib/db';
 import Link from 'next/link';
 import { Lock, User } from 'lucide-react';
+
+import { login as loginAction } from '@/actions/auth';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
       if (!username || !password) {
         setError('Vui lòng nhập tên đăng nhập và mật khẩu.');
+        setLoading(false);
         return;
       }
 
-      const user = await getUserById(username);
+      const res = await loginAction(username, password);
       
-      if (user && user.passwordHash === password) {
-        login(user);
-        router.push('/');
+      if (res.success) {
+        // Forces a full refresh to apply server-side cookies
+        window.location.href = '/';
       } else {
-        setError('Tên đăng nhập hoặc mật khẩu không chính xác.');
+        setError(res.message || 'Tên đăng nhập hoặc mật khẩu không chính xác.');
       }
     } catch (err) {
       console.error('Login error:', err);
       setError('Đã xảy ra lỗi khi đăng nhập. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -2,43 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { updateUser } from '@/lib/db';
+import { updateProfile } from '@/actions/auth';
 import { Shield, User as UserIcon, Key, LogOut, Save } from 'lucide-react';
 import { useApp } from '@/providers/AppProvider';
 
 export default function ProfilePage() {
   const { user, logout, updateUserSession } = useAuth();
   const { toast } = useApp();
-  
-  const [name, setName] = useState('');
-  const [isUpdatingName, setIsUpdatingName] = useState(false);
 
   const [password, setPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      setName(user.name);
-    }
-  }, [user]);
 
   if (!user) return null;
 
   const handleUpdateName = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return toast('Vui lòng nhập họ tên', 'error');
-    
-    setIsUpdatingName(true);
-    try {
-      await updateUser(user.id, { name: name.trim() });
-      updateUserSession({ ...user, name: name.trim() });
-      toast('Cập nhật họ tên thành công', 'success');
-    } catch (err) {
-      console.error(err);
-      toast('Có lỗi xảy ra khi cập nhật tên', 'error');
-    } finally {
-      setIsUpdatingName(false);
-    }
+    toast('Chức năng đổi tên đã tạm khóa.', 'info');
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -47,13 +26,14 @@ export default function ProfilePage() {
     
     setIsUpdatingPassword(true);
     try {
-      await updateUser(user.id, { passwordHash: password.trim() });
-      updateUserSession({ ...user, passwordHash: password.trim() });
+      const res = await updateProfile(password.trim());
+      if (!res.success) throw new Error(res.message);
+      
       setPassword('');
       toast('Đổi mật khẩu thành công', 'success');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast('Có lỗi xảy ra khi đổi mật khẩu', 'error');
+      toast(err.message || 'Có lỗi xảy ra khi đổi mật khẩu', 'error');
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -75,9 +55,9 @@ export default function ProfilePage() {
           <UserIcon className="w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">{user.name}</h2>
+          <h2 className="text-xl font-bold text-white">{user.username || user.name}</h2>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="badge badge-bank">@{user.id}</span>
+            <span className="badge badge-bank">@{user.username || user.id}</span>
             <span className="badge badge-active flex items-center gap-1">
               <Shield className="w-3 h-3" />
               {user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'}
@@ -88,30 +68,30 @@ export default function ProfilePage() {
 
       {/* Forms Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Form 1: Update Name */}
-        <div className="glass-card p-6">
+        {/* Form 1: Update Name (Disabled) */}
+        <div className="glass-card p-6 opacity-50 pointer-events-none">
           <div className="flex items-center gap-2 mb-4">
             <UserIcon className="w-5 h-5 text-primary" />
-            <h3 className="text-base font-bold text-white">Thông tin cá nhân</h3>
+            <h3 className="text-base font-bold text-white">Thông tin cá nhân (Đang khóa)</h3>
           </div>
-          <form onSubmit={handleUpdateName} className="space-y-4">
+          <form className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-muted mb-1.5">Họ và tên</label>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={user.username || user.name}
+                readOnly
                 className="input-field"
                 placeholder="Nhập họ tên mới..."
               />
             </div>
             <button
-              type="submit"
-              disabled={isUpdatingName || name === user.name}
+              type="button"
+              disabled
               className="btn btn-primary w-full justify-center"
             >
               <Save className="w-4 h-4" />
-              {isUpdatingName ? 'Đang lưu...' : 'Lưu thay đổi'}
+              Lưu thay đổi
             </button>
           </form>
         </div>

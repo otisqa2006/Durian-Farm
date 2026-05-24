@@ -1,30 +1,27 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types';
-import { getUserById } from '@/lib/db';
 import { useRouter, usePathname } from 'next/navigation';
+import { getSession, logout as serverLogout } from '@/actions/auth';
 
 interface AuthContextType {
-  user: User | null;
+  user: any | null;
   isLoading: boolean;
-  login: (user: User) => void;
-  logout: () => void;
-  updateUserSession: (user: User) => void;
+  logout: () => Promise<void>;
+  updateUserSession: (user: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
-  login: () => {},
-  logout: () => {},
+  logout: async () => {},
   updateUserSession: () => {},
 });
 
 const PUBLIC_ROUTES = ['/login', '/register'];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -32,14 +29,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function loadSession() {
       try {
-        const storedUserId = localStorage.getItem('srm_user_id');
-        if (storedUserId) {
-          const dbUser = await getUserById(storedUserId);
-          if (dbUser) {
-            setUser(dbUser);
-          } else {
-            localStorage.removeItem('srm_user_id');
-          }
+        const session = await getSession();
+        if (session) {
+          setUser(session);
+        } else {
+          setUser(null);
         }
       } catch (err) {
         console.error('Failed to load session:', err);
@@ -48,38 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     loadSession();
-  }, []);
+  }, [pathname]);
 
-  // Protect routes
-  useEffect(() => {
-    if (!isLoading) {
-      const isPublic = PUBLIC_ROUTES.includes(pathname);
-      if (!user && !isPublic) {
-        router.replace('/login');
-      } else if (user && isPublic) {
-        router.replace('/');
-      }
-    }
-  }, [user, isLoading, pathname, router]);
-
-  const login = (newUser: User) => {
-    localStorage.setItem('srm_user_id', newUser.id);
-    setUser(newUser);
-    router.replace('/');
-  };
-
-  const logout = () => {
-    localStorage.removeItem('srm_user_id');
+  const logout = async () => {
+    await serverLogout();
     setUser(null);
     router.replace('/login');
   };
 
-  const updateUserSession = (updatedUser: User) => {
+  const updateUserSession = (updatedUser: any) => {
     setUser(updatedUser);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, updateUserSession }}>
+    <AuthContext.Provider value={{ user, isLoading, logout, updateUserSession }}>
       {/* Hide content until auth is resolved to prevent flashing protected content */}
       {!isLoading && children}
     </AuthContext.Provider>

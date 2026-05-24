@@ -7,10 +7,13 @@ import { useFunds } from '@/hooks/useFunds';
 import { INCOME_CATEGORIES } from '@/lib/constants';
 import { formatCurrency, formatDate, toDateInputValue } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
+import NumericInput from '@/components/ui/NumericInput';
 import type { IncomeCategory, Grade } from '@/types';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useApp } from '@/providers/AppProvider';
+import { getUsers } from '@/actions/users';
+import useSWR from 'swr';
 
 // ─── Initial form state ──────────────────────────────
 const defaultForm = () => ({
@@ -27,16 +30,22 @@ const defaultForm = () => ({
 // ======================================================
 export default function ThuPage() {
   const { user } = useAuth();
-  const { toast, confirm } = useApp();
-  const canEdit = user?.role === 'admin' || user?.permissions?.canManageThu;
+  const { toast, confirm, selectedSeasonId, activeSeasonId } = useApp();
+  const isSeasonActive = selectedSeasonId === activeSeasonId;
+  const canEdit = (user?.role === 'admin' || user?.permissions?.can_manage_thu) && isSeasonActive;
 
   const { incomeTransactions, totalIncome, addTransaction, removeTransaction } =
-    useTransactions();
-  const { funds, masterFund } = useFunds();
+    useTransactions(undefined, selectedSeasonId);
+  const { funds, masterFund } = useFunds(selectedSeasonId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [submitting, setSubmitting] = useState(false);
+
+  const { data: allUsers } = useSWR('users', getUsers);
+  const getUserName = (id: string) => {
+    return allUsers?.find(u => u.id === id)?.name || id;
+  };
 
   // ─── Derived KPIs ─────────────────────────────────
   const incomeRi6 = incomeTransactions
@@ -136,7 +145,14 @@ export default function ThuPage() {
     <div className="space-y-6 animate-fade-in">
       {/* ── Header ─────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-white">Quản lý Dòng Thu</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-white">Quản lý Dòng Thu</h1>
+          {!isSeasonActive && (
+            <p className="text-warning text-xs mt-1 bg-warning/10 inline-block px-2 py-1 rounded">
+              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
+            </p>
+          )}
+        </div>
         {canEdit && (
           <button onClick={openModal} className="btn btn-primary gap-2">
             <Plus className="w-4 h-4" />
@@ -242,13 +258,15 @@ export default function ThuPage() {
                     </td>
                     {canEdit && (
                       <td className="text-center">
-                        <button
-                          onClick={() => handleDelete(txn.id)}
-                          className="btn btn-ghost btn-sm text-muted hover:text-red-400"
-                          title="Xoá"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!txn.description?.startsWith('Cân đối quỹ:') && (
+                          <button
+                            onClick={() => handleDelete(txn.id)}
+                            className="btn btn-ghost btn-sm text-muted hover:text-red-400"
+                            title="Xoá"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -314,14 +332,12 @@ export default function ThuPage() {
               <label className="block text-sm text-muted mb-1.5">
                 Số lượng (kg)
               </label>
-              <input
-                type="number"
+              <NumericInput
                 value={form.kg}
-                onChange={(e) => setForm({ ...form, kg: e.target.value })}
-                min={0}
-                step={0.1}
-                placeholder="Ví dụ: 150"
+                onChange={(val) => setForm({ ...form, kg: val })}
+                allowDecimal={true}
                 className="input-field"
+                placeholder="Ví dụ: 150"
                 required
               />
             </div>
@@ -331,16 +347,11 @@ export default function ThuPage() {
               <label className="block text-sm text-muted mb-1.5">
                 Giá / kg (₫)
               </label>
-              <input
-                type="text"
+              <NumericInput
                 value={form.pricePerKg}
-                onChange={(e) => {
-                  const rawValue = e.target.value.replace(/\D/g, '');
-                  const formatted = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                  setForm({ ...form, pricePerKg: formatted });
-                }}
-                placeholder="Ví dụ: 65.000"
+                onChange={(val) => setForm({ ...form, pricePerKg: val })}
                 className="input-field"
+                placeholder="Ví dụ: 85000"
                 required
               />
             </div>
@@ -366,7 +377,7 @@ export default function ThuPage() {
               Quỹ nhận (Mặc định)
             </label>
             <div className="input-field bg-card/50 text-white cursor-not-allowed border-border/30">
-              {masterFund ? `${masterFund.name} (${masterFund.holder})` : 'Quỹ Tổng (Chung)'}
+              {masterFund ? `${masterFund.name} (${getUserName(masterFund.holderId)})` : 'Quỹ Tổng (Chung)'}
             </div>
           </div>
 

@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createUser } from '@/lib/db';
-import { User } from '@/types';
+import { register } from '@/actions/auth';
 import { useApp } from '@/providers/AppProvider';
 
 export default function RegisterPage() {
@@ -28,22 +27,13 @@ export default function RegisterPage() {
         throw new Error('Vui lòng điền đầy đủ thông tin');
       }
 
-      const newUser: User = {
-        id: formData.id,
-        passwordHash: formData.password,
-        name: formData.name,
-        role: 'user',
-        permissions: {
-          canManageThu: false,
-          canManageChi: false,
-          canManageQuy: false,
-          canViewBaoCao: false
-        },
-        createdAt: new Date()
-      };
+      const res = await register(formData.id, formData.password);
+      
+      if (!res.success) {
+        throw new Error(res.message);
+      }
 
-      await createUser(newUser);
-      toast('Đăng ký thành công', 'success');
+      toast('Đăng ký thành công! Hãy đăng nhập', 'success');
       router.push('/login');
     } catch (err: any) {
       console.error('Registration error:', err);

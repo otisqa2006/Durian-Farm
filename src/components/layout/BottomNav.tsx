@@ -8,6 +8,11 @@ import {
   TrendingDown,
   Wallet,
   Menu,
+  X,
+  ChevronRight,
+  ArrowLeftRight,
+  Landmark,
+  BarChart3
 } from 'lucide-react';
 import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
@@ -20,6 +25,16 @@ const BOTTOM_NAV_ITEMS = [
   { href: '/chi', label: 'Chi', icon: TrendingDown },
   { href: '/quy', label: 'Quỹ', icon: Wallet },
 ];
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  ArrowLeftRight,
+  Landmark,
+  BarChart3
+};
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -73,43 +88,94 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      {/* More Menu Modal (Bottom Sheet style for mobile) */}
-      <Modal
-        isOpen={isMoreMenuOpen}
-        onClose={() => setIsMoreMenuOpen(false)}
-        title="Tính năng khác"
+      {/* Slide-over More Menu */}
+      {isMoreMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-[999] backdrop-blur-sm transition-opacity lg:hidden" 
+          onClick={() => setIsMoreMenuOpen(false)}
+        />
+      )}
+      
+      <div 
+        className={`fixed top-0 right-0 bottom-0 w-[75vw] max-w-sm bg-background border-l border-border/50 z-[1000] shadow-2xl transition-transform duration-300 ease-in-out flex flex-col lg:hidden ${isMoreMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <div className="grid grid-cols-2 gap-3 py-2">
-          {NAV_ITEMS.filter(item => !BOTTOM_NAV_ITEMS.some(nav => nav.href === item.href)).map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setIsMoreMenuOpen(false)}
-              className="flex flex-col items-center gap-3 p-4 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
-            >
-              <span className="text-sm font-medium text-white text-center">{item.label}</span>
-            </Link>
-          ))}
+        <div className="p-4 border-b border-border/50 flex items-center justify-between bg-card/50">
+          <h2 className="text-lg font-bold text-white">Tính năng khác</h2>
+          <button 
+            onClick={() => setIsMoreMenuOpen(false)} 
+            className="p-2 -mr-2 text-muted hover:text-white transition-colors rounded-full hover:bg-white/10"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {NAV_ITEMS.filter(item => !BOTTOM_NAV_ITEMS.some(nav => nav.href === item.href)).map(item => {
+            const Icon = ICON_MAP[item.icon as string];
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsMoreMenuOpen(false)}
+                className="flex items-center justify-between p-3.5 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                    {Icon ? <Icon className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </div>
+                  <span className="text-sm font-medium text-white">{item.label}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted" />
+              </Link>
+            );
+          })}
+
+          <div className="my-4 border-t border-border/50"></div>
 
           <Link
             href="/ca-nhan"
             onClick={() => setIsMoreMenuOpen(false)}
-            className="flex flex-col items-center gap-3 p-4 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
+            className="flex items-center justify-between p-3.5 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
           >
-            <span className="text-sm font-medium text-white text-center">Cá nhân</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <span className="text-sm font-medium text-white">Cá nhân</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted" />
+          </Link>
+
+          <Link
+            href="/huong-dan"
+            onClick={() => setIsMoreMenuOpen(false)}
+            className="flex items-center justify-between p-3.5 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                <span className="text-xs">?</span>
+              </div>
+              <span className="text-sm font-medium text-white">Hướng dẫn</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted" />
           </Link>
 
           {user?.role === 'admin' && (
             <Link
               href="/quan-ly-user"
               onClick={() => setIsMoreMenuOpen(false)}
-              className="flex flex-col items-center gap-3 p-4 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
+              className="flex items-center justify-between p-3.5 rounded-xl bg-card hover:bg-card-hover border border-border/50 transition-colors"
             >
-              <span className="text-sm font-medium text-white text-center">Quản lý User</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <span className="text-sm font-medium text-white">Quản lý User</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted" />
             </Link>
           )}
         </div>
-      </Modal>
+      </div>
     </>
   );
 }

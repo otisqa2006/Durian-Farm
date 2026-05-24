@@ -16,7 +16,6 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { useFunds } from '@/hooks/useFunds';
 import { useAuth } from '@/hooks/useAuth';
 import { useApp } from '@/providers/AppProvider';
-import { getMonthlyStats, getIncomeByCategory, getExpenseByCategory } from '@/lib/db';
 import { INCOME_CATEGORIES, EXPENSE_CATEGORIES, CHART_COLORS } from '@/lib/constants';
 import { formatCurrency, formatNumber, getMonthName, formatDate } from '@/lib/utils';
 
@@ -88,15 +87,15 @@ function renderCustomizedLabel({
 // ==========================================
 export default function BaoCaoPage() {
   const { user } = useAuth();
-  const { toast } = useApp();
-  const canView = user?.role === 'admin' || user?.permissions?.canViewBaoCao;
+  const { toast, selectedSeasonId } = useApp();
+  const canView = user?.role === 'admin' || user?.permissions?.can_view_baocao;
 
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
 
-  const { transactions } = useTransactions();
-  const { funds } = useFunds();
+  const { transactions } = useTransactions(undefined, selectedSeasonId);
+  const { funds } = useFunds(selectedSeasonId);
 
   if (!canView) {
     return (
@@ -123,67 +122,82 @@ export default function BaoCaoPage() {
   const [trendData, setTrendData] = useState<MonthlyTrend[]>([]);
   const [trendLoading, setTrendLoading] = useState(true);
 
-  // Fetch monthly stats for selected month
+  // Compute monthly stats for selected month
   useEffect(() => {
-    async function load() {
-      try {
-        const stats = await getMonthlyStats(selectedYear, selectedMonth);
-        setMonthlyIncome(stats.income);
-        setMonthlyExpense(stats.expense);
+    try {
+      const currentMonthTxns = transactions.filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+      });
 
-        // Income by category
-        const incomeRaw = await getIncomeByCategory(selectedYear, selectedMonth);
-        const incomeData: CategoryData[] = INCOME_CATEGORIES
-          .map(cat => ({
-            name: cat.label,
-            value: incomeRaw[cat.value] || 0,
-            color: cat.color,
-          }))
-          .filter(d => d.value > 0);
-        setIncomeByCat(incomeData);
+      const income = currentMonthTxns.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const expense = currentMonthTxns.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
 
-        // Expense by category
-        const expenseRaw = await getExpenseByCategory(selectedYear, selectedMonth);
-        const expenseData: CategoryData[] = EXPENSE_CATEGORIES
-          .map(cat => ({
-            name: cat.label,
-            value: expenseRaw[cat.value] || 0,
-            color: cat.color,
-          }))
-          .filter(d => d.value > 0);
-        setExpenseByCat(expenseData);
-      } catch (err) {
-        console.error('Failed to load monthly stats:', err);
-      }
+      setMonthlyIncome(income);
+      setMonthlyExpense(expense);
+
+      // Income by category
+      const incomeRaw: Record<string, number> = {};
+      currentMonthTxns.filter(t => t.type === 'income').forEach(t => {
+        incomeRaw[t.category] = (incomeRaw[t.category] || 0) + t.amount;
+      });
+      const incomeData: CategoryData[] = INCOME_CATEGORIES
+        .map(cat => ({
+          name: cat.label,
+          value: incomeRaw[cat.value] || 0,
+          color: cat.color,
+        }))
+        .filter(d => d.value > 0);
+      setIncomeByCat(incomeData);
+
+      // Expense by category
+      const expenseRaw: Record<string, number> = {};
+      currentMonthTxns.filter(t => t.type === 'expense').forEach(t => {
+        expenseRaw[t.category] = (expenseRaw[t.category] || 0) + t.amount;
+      });
+      const expenseData: CategoryData[] = EXPENSE_CATEGORIES
+        .map(cat => ({
+          name: cat.label,
+          value: expenseRaw[cat.value] || 0,
+          color: cat.color,
+        }))
+        .filter(d => d.value > 0);
+      setExpenseByCat(expenseData);
+    } catch (err) {
+      console.error('Failed to load monthly stats:', err);
     }
-    load();
   }, [selectedYear, selectedMonth, transactions]);
 
-  // Fetch 6-month trend
+  // Compute 6-month trend
   useEffect(() => {
-    async function loadTrend() {
-      setTrendLoading(true);
-      try {
-        const result: MonthlyTrend[] = [];
-        for (let i = 5; i >= 0; i--) {
-          let m = selectedMonth - i;
-          let y = selectedYear;
-          while (m < 0) { m += 12; y -= 1; }
-          const stats = await getMonthlyStats(y, m);
-          result.push({
-            label: getMonthName(m),
-            income: stats.income,
-            expense: stats.expense,
-          });
-        }
-        setTrendData(result);
-      } catch (err) {
-        console.error('Failed to load trend data:', err);
-      } finally {
-        setTrendLoading(false);
+    setTrendLoading(true);
+    try {
+      const result: MonthlyTrend[] = [];
+      for (let i = 5; i >= 0; i--) {
+        let m = selectedMonth - i;
+        let y = selectedYear;
+        while (m < 0) { m += 12; y -= 1; }
+
+        const monthTxns = transactions.filter(t => {
+          const d = new Date(t.date);
+          return d.getFullYear() === y && d.getMonth() === m;
+        });
+
+        const income = monthTxns.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const expense = monthTxns.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+
+        result.push({
+          label: getMonthName(m),
+          income,
+          expense,
+        });
       }
+      setTrendData(result);
+    } catch (err) {
+      console.error('Failed to load trend data:', err);
+    } finally {
+      setTrendLoading(false);
     }
-    loadTrend();
   }, [selectedYear, selectedMonth, transactions]);
 
   // --- Net ---

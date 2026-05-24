@@ -1,24 +1,20 @@
 'use client';
 
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, createTransaction as dbCreateTransaction, deleteTransaction as dbDeleteTransaction } from '@/lib/db';
+import useSWR from 'swr';
+import { getTransactions, addTransaction as serverAddTransaction, addTransactions as serverAddTransactions, updateTransaction as serverUpdateTransaction, deleteTransaction as serverDeleteTransaction } from '@/actions/transactions';
 import type { Transaction, TransactionType, IncomeCategory, ExpenseCategory, Grade } from '@/types';
-import { v4 as uuidv4 } from 'uuid';
 import { useCallback } from 'react';
 
-export function useTransactions(fundId?: string) {
-  const transactions = useLiveQuery(
-    async () => {
-      let query = db.transactions.orderBy('date').reverse();
-      const all = await query.toArray();
-      if (fundId) {
-        return all.filter(t => t.fundId === fundId);
-      }
-      return all;
-    },
-    [fundId],
-    []
+export function useTransactions(fundId?: string, seasonId?: string | null) {
+  const { data: allTransactions, mutate } = useSWR(
+    seasonId ? ['transactions', seasonId] : null,
+    ([_, sid]) => getTransactions(sid as string)
   );
+  
+  let transactions = allTransactions || [];
+  if (fundId) {
+    transactions = transactions.filter(t => t.fundId === fundId);
+  }
 
   const addTransaction = useCallback(
     async (data: {
@@ -32,20 +28,32 @@ export function useTransactions(fundId?: string) {
       pricePerKg?: number;
       grade?: Grade;
     }) => {
-      const txn: Transaction = {
-        id: uuidv4(),
-        ...data,
-        createdAt: new Date(),
-      };
-      await dbCreateTransaction(txn);
-      return txn;
+      await serverAddTransaction(data);
+      mutate();
     },
-    []
+    [mutate]
+  );
+
+  const addMultipleTransactions = useCallback(
+    async (dataList: Omit<Transaction, 'id' | 'createdAt'>[]) => {
+      await serverAddTransactions(dataList);
+      mutate();
+    },
+    [mutate]
+  );
+
+  const updateTransaction = useCallback(
+    async (id: string, data: Partial<Omit<Transaction, 'id' | 'createdAt'>>) => {
+      await serverUpdateTransaction(id, data);
+      mutate();
+    },
+    [mutate]
   );
 
   const removeTransaction = useCallback(async (id: string) => {
-    await dbDeleteTransaction(id);
-  }, []);
+    await serverDeleteTransaction(id);
+    mutate();
+  }, [mutate]);
 
   const incomeTransactions = transactions.filter(t => t.type === 'income');
   const expenseTransactions = transactions.filter(t => t.type === 'expense');
@@ -59,25 +67,22 @@ export function useTransactions(fundId?: string) {
     totalIncome,
     totalExpense,
     addTransaction,
+    addMultipleTransactions,
+    updateTransaction,
     removeTransaction,
   };
 }
 
-export function useMonthlyTransactions(year: number, month: number) {
-  const start = new Date(year, month, 1);
-  const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
-
-  const transactions = useLiveQuery(
-    async () => {
-      return db.transactions
-        .where('date')
-        .between(start, end, true, true)
-        .reverse()
-        .sortBy('date');
-    },
-    [year, month],
-    []
+export function useMonthlyTransactions(year: number, month: number, seasonId?: string | null) {
+  const { data: allTransactions } = useSWR(
+    seasonId ? ['transactions', seasonId] : null,
+    ([_, sid]) => getTransactions(sid as string)
   );
+  
+  const transactions = (allTransactions || []).filter(t => {
+    const d = new Date(t.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
 
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);

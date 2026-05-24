@@ -18,6 +18,7 @@ import { useTransactions, useMonthlyTransactions } from '@/hooks/useTransactions
 import { useDebts } from '@/hooks/useDebts';
 import { formatCurrency, formatDate, getMonthName } from '@/lib/utils';
 import { CHART_COLORS } from '@/lib/constants';
+import { useApp } from '@/providers/AppProvider';
 
 // ==========================================
 // KPI Card Component
@@ -54,15 +55,17 @@ function KPICard({
 // Dashboard Page
 // ==========================================
 export default function DashboardPage() {
-  const { funds, masterFund, subFunds, totalBalance } = useFunds();
-  const { transactions } = useTransactions();
+  const { selectedSeasonId, activeSeasonId } = useApp();
+  
+  const { funds, masterFund, subFunds, totalBalance } = useFunds(selectedSeasonId);
+  const { transactions } = useTransactions(undefined, selectedSeasonId);
   const { totalDebt } = useDebts();
-  const validator = useBalanceValidator();
+  const validator = useBalanceValidator(selectedSeasonId);
 
   // Current month stats
   const now = new Date();
   const { totalIncome: monthlyIncome, totalExpense: monthlyExpense } =
-    useMonthlyTransactions(now.getFullYear(), now.getMonth());
+    useMonthlyTransactions(now.getFullYear(), now.getMonth(), selectedSeasonId);
 
   // Recent 8 transactions
   const recentTransactions = useMemo(
@@ -87,6 +90,14 @@ export default function DashboardPage() {
           {currentMonth} {now.getFullYear()} — SRM Finance
         </p>
       </div>
+
+      {/* Season Warning */}
+      {selectedSeasonId && activeSeasonId && selectedSeasonId !== activeSeasonId && (
+        <div className="bg-warning/20 border border-warning/50 text-warning px-4 py-3 rounded-xl flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          <p className="text-sm font-medium">Bạn đang xem dữ liệu của mùa vụ lưu trữ. Dữ liệu chỉ có thể xem, không thể chỉnh sửa.</p>
+        </div>
+      )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 stagger-children">
@@ -182,7 +193,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      f.type === 'master' ? 'bg-primary-light' : 'bg-info'
+                      f.isMaster ? 'bg-primary-light' : 'bg-info'
                     }`}
                   />
                   <span className="text-sm text-white truncate max-w-[140px]">

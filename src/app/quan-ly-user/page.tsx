@@ -2,35 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { getAllUsers, updateUser, deleteUser } from '@/lib/db';
-import { User, Permissions } from '@/types';
+import { getUsers, updateUserPermissions, deleteUser as serverDeleteUser } from '@/actions/users';
+import useSWR from 'swr';
+import { Permissions } from '@/types';
 import { ShieldAlert, Trash2 } from 'lucide-react';
 import { useApp } from '@/providers/AppProvider';
 
 export default function QuanLyUserPage() {
   const { user } = useAuth();
   const { toast, confirm } = useApp();
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchUsers = async () => {
-    try {
-      const data = await getAllUsers();
-      setUsers(data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      fetchUsers();
-    } else {
-      setIsLoading(false);
-    }
-  }, [user]);
+  const { data, mutate, isLoading } = useSWR('users', getUsers);
+  const users = data || [];
 
   if (isLoading) {
     return <div className="p-4 text-center text-muted">Đang tải dữ liệu...</div>;
@@ -58,11 +40,8 @@ export default function QuanLyUserPage() {
         [key]: !currentValue
       };
 
-      await updateUser(userId, { permissions: newPermissions });
-      
-      setUsers(users.map(u => 
-        u.id === userId ? { ...u, permissions: newPermissions } : u
-      ));
+      await updateUserPermissions(userId, newPermissions);
+      mutate();
       toast('Cập nhật quyền thành công', 'success');
     } catch (error: any) {
       toast(error.message || 'Lỗi khi cập nhật quyền', 'error');
@@ -74,8 +53,8 @@ export default function QuanLyUserPage() {
     if (!ok) return;
 
     try {
-      await deleteUser(userId);
-      setUsers(users.filter(u => u.id !== userId));
+      await serverDeleteUser(userId);
+      mutate();
       toast('Xóa người dùng thành công', 'success');
     } catch (error: any) {
       toast(error.message || 'Lỗi khi xóa người dùng', 'error');

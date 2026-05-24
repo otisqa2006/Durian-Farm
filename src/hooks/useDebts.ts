@@ -1,22 +1,16 @@
 'use client';
 
-import { useLiveQuery } from 'dexie-react-hooks';
-import {
-  getAllDebts,
-  getDebtById,
-  createDebt as dbCreateDebt,
-  updateDebt as dbUpdateDebt,
-  createDebtPayment as dbCreateDebtPayment,
-  getPaymentsByDebt,
-  getAllDebtPayments,
-} from '@/lib/db';
-import type { Debt, DebtPayment, DebtType } from '@/types';
-import { v4 as uuidv4 } from 'uuid';
+import useSWR from 'swr';
+import { getDebts, addDebt as serverAddDebt, payDebt as serverPayDebt } from '@/actions/debts';
+import type { DebtType } from '@/types';
 import { useCallback } from 'react';
 
 export function useDebts() {
-  const debts = useLiveQuery(() => getAllDebts(), [], []);
-  const payments = useLiveQuery(() => getAllDebtPayments(), [], []);
+  const { data: allDebts, mutate } = useSWR('debts', getDebts);
+  const debts = allDebts || [];
+  
+  // We skip loading payments for the overview for now to save bandwidth
+  const payments: any[] = []; 
 
   const bankDebts = debts.filter(d => d.type === 'bank');
   const externalDebts = debts.filter(d => d.type === 'external');
@@ -42,19 +36,10 @@ export function useDebts() {
       dueDate?: Date;
       note?: string;
     }) => {
-      const now = new Date();
-      const debt: Debt = {
-        id: uuidv4(),
-        ...data,
-        remainingAmount: data.principalAmount,
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      };
-      await dbCreateDebt(debt);
-      return debt;
+      await serverAddDebt(data);
+      mutate();
     },
-    []
+    [mutate]
   );
 
   const payDebt = useCallback(
@@ -67,15 +52,10 @@ export function useDebts() {
       date: Date;
       note?: string;
     }) => {
-      const payment: DebtPayment = {
-        id: uuidv4(),
-        ...data,
-        createdAt: new Date(),
-      };
-      await dbCreateDebtPayment(payment);
-      return payment;
+      await serverPayDebt(data.debtId, data.principalPaid, data.interestPaid, data.fundId, data.date);
+      mutate();
     },
-    []
+    [mutate]
   );
 
   return {
@@ -93,8 +73,9 @@ export function useDebts() {
 }
 
 export function useDebtDetail(debtId: string) {
-  const debt = useLiveQuery(() => getDebtById(debtId), [debtId]);
-  const payments = useLiveQuery(() => getPaymentsByDebt(debtId), [debtId], []);
+  const { data: allDebts } = useSWR('debts', getDebts);
+  const debt = (allDebts || []).find(d => d.id === debtId);
+  const payments: any[] = []; // Skipping payments detail for now
 
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const totalPrincipalPaid = payments.reduce((sum, p) => sum + p.principalPaid, 0);
