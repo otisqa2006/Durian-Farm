@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AppShell from "@/components/layout/AppShell";
 import { AppProvider } from "@/providers/AppProvider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "SRM Finance — Quản lý Thu Chi Rẫy Sầu Riêng",
@@ -36,6 +37,7 @@ export default function RootLayout({
         <AppProvider>
           <AppShell>{children}</AppShell>
         </AppProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
