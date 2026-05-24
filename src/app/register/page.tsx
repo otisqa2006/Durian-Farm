@@ -30,7 +30,7 @@ export default function RegisterPage() {
 
       const newUser: User = {
         id: formData.id,
-        password: formData.password,
+        passwordHash: formData.password,
         name: formData.name,
         role: 'user',
         permissions: {

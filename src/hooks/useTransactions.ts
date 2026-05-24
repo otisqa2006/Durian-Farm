@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, createTransaction as dbCreateTransaction, deleteTransaction as dbDeleteTransaction } from '@/lib/db';
-import type { Transaction, TransactionType, IncomeCategory, ExpenseCategory } from '@/types';
+import type { Transaction, TransactionType, IncomeCategory, ExpenseCategory, Grade } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import { useCallback } from 'react';
 
@@ -28,6 +28,9 @@ export function useTransactions(fundId?: string) {
       fundId: string;
       description: string;
       date: Date;
+      kg?: number;
+      pricePerKg?: number;
+      grade?: Grade;
     }) => {
       const txn: Transaction = {
         id: uuidv4(),
