@@ -139,7 +139,20 @@ export default function FundsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* ============================================
-          1. Balance Invariant Check Banner
+          1. Inactive Season Warning
+          ============================================ */}
+      {!isSeasonActive && (
+        <div className="bg-warning/10 border border-warning/20 text-warning px-4 py-3 rounded-xl flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold">Mùa vụ đã lưu trữ</p>
+            <p className="opacity-90">Bạn đang xem dữ liệu của một mùa vụ đã kết thúc. Mọi chức năng chỉnh sửa đều bị vô hiệu hoá.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          2. Balance Invariant Check Banner
           ============================================ */}
       <div
         className={`glass-card p-5 border-2 ${
@@ -185,33 +198,7 @@ export default function FundsPage() {
         </div>
       </div>
 
-      {/* ============================================
-          2. Header
-          ============================================ */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Quản lý Quỹ</h1>
-          {!isSeasonActive && (
-            <p className="text-warning text-xs mt-1 bg-warning/10 inline-block px-2 py-1 rounded">
-              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
-            </p>
-          )}
-          {isSeasonActive && (
-            <p className="text-sm text-muted mt-1">
-              Quản lý quỹ tổng và các quỹ nhánh
-            </p>
-          )}
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="btn btn-primary"
-          >
-            <Plus className="w-4 h-4" />
-            Tạo Quỹ Nhánh
-          </button>
-        )}
-      </div>
+
 
       {/* ============================================
           3. Master Fund Card
@@ -222,34 +209,34 @@ export default function FundsPage() {
             {/* Decorative gradient overlay */}
             <div className="absolute top-0 right-0 w-40 h-40 gradient-primary opacity-[0.07] rounded-full -translate-y-1/2 translate-x-1/2" />
 
-            <div className="flex items-start justify-between relative z-10">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl gradient-primary shadow-lg shadow-primary/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10 w-full">
+              <div className="flex items-center gap-4 w-full">
+                <div className="p-3 rounded-2xl gradient-primary shadow-lg shadow-primary/20 shrink-0">
                   <Crown className="w-6 h-6 text-white" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-white">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-bold text-white truncate">
                       {masterFund.name}
                     </h2>
-                    <span className="badge badge-income text-[11px]">Quỹ chính</span>
+                    <span className="badge badge-income text-[11px] shrink-0">Quỹ chính</span>
                   </div>
-                  <p className="text-sm text-muted mt-0.5">
+                  <p className="text-sm text-muted mt-0.5 truncate">
                     Người giữ: {getUserName(masterFund.holderId)}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-xs text-muted uppercase tracking-wide mb-1">
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0">
+                <div>
+                  <p className="text-xs text-muted uppercase tracking-wide mb-1 text-left sm:text-right">
                     Số dư
                   </p>
-                  <p className="text-2xl font-bold text-white font-mono-num">
+                  <p className="text-xl sm:text-2xl font-bold text-white font-mono-num truncate">
                     {formatCurrency(masterFund.balance)}
                   </p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted group-hover:text-white transition-colors" />
+                <ChevronRight className="w-5 h-5 text-muted group-hover:text-white transition-colors shrink-0" />
               </div>
             </div>
 
@@ -274,14 +261,25 @@ export default function FundsPage() {
           4. Sub-Fund Cards Grid
           ============================================ */}
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <Wallet className="w-4 h-4 text-muted" />
-          <h2 className="text-base font-semibold text-white">
-            Quỹ Nhánh
-          </h2>
-          <span className="badge badge-bank text-[11px]">
-            {subFunds.length} quỹ
-          </span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-muted" />
+            <h2 className="text-base font-semibold text-white">
+              Quỹ Nhánh
+            </h2>
+            <span className="badge badge-bank text-[11px]">
+              {subFunds.length} quỹ
+            </span>
+          </div>
+          {canEdit && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="btn btn-primary btn-sm"
+            >
+              <Plus className="w-4 h-4 hidden sm:block" />
+              Tạo Quỹ
+            </button>
+          )}
         </div>
 
         {subFunds.length === 0 ? (
@@ -386,11 +384,11 @@ export default function FundsPage() {
               {subFunds.length}
             </p>
           </div>
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <p className="text-xs text-muted uppercase tracking-wide mb-1">
               Tổng số dư hệ thống
             </p>
-            <p className="text-xl font-bold text-success font-mono-num">
+            <p className="text-xl font-bold text-success font-mono-num truncate">
               {formatCurrency(totalBalance)}
             </p>
           </div>

@@ -25,8 +25,8 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string; color:
 // ==========================================
 export const NAV_ITEMS = [
   { href: '/', label: 'Tổng quan', icon: 'LayoutDashboard' as const },
-  { href: '/thu', label: 'Dòng Thu', icon: 'TrendingUp' as const },
-  { href: '/chi', label: 'Dòng Chi', icon: 'TrendingDown' as const },
+  { href: '/thu', label: 'Quản lý Thu', icon: 'TrendingUp' as const },
+  { href: '/chi', label: 'Quản lý Chi', icon: 'TrendingDown' as const },
   { href: '/quy', label: 'Quản lý Quỹ', icon: 'Wallet' as const },
   { href: '/chuyen-tien', label: 'Chuyển tiền', icon: 'ArrowLeftRight' as const },
   { href: '/cong-no', label: 'Công nợ', icon: 'Landmark' as const },

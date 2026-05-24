@@ -129,19 +129,16 @@ export default function ChuyenTienPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ============ Header ============ */}
+      {/* ============ Action Bar ============ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl gradient-info flex items-center justify-center shadow-lg">
-              <ArrowLeftRight className="w-5 h-5 text-white" />
-            </div>
-            Chuyển tiền Nội bộ
-          </h1>
           {!isSeasonActive && (
-            <p className="text-warning text-xs mt-2 bg-warning/10 inline-block px-2 py-1 rounded">
-              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
-            </p>
+            <div className="bg-warning/10 border border-warning/20 text-warning px-4 py-3 rounded-xl flex items-start gap-3">
+              <div className="text-sm">
+                <p className="font-bold">Mùa vụ đã lưu trữ</p>
+                <p className="opacity-90">Bạn đang xem dữ liệu của một mùa vụ đã kết thúc. Không thể chỉnh sửa.</p>
+              </div>
+            </div>
           )}
         </div>
         {canEdit && (

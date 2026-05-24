@@ -25,7 +25,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Find current page info for the header
   const currentNav = NAV_ITEMS.find(item => item.href === pathname);
-  const pageTitle = currentNav?.label ?? 'SRM Finance';
+  const pageTitle = currentNav?.label ?? 'OM Farm';
 
   return (
     <AuthProvider>

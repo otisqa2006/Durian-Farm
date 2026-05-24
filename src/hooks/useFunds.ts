@@ -4,10 +4,10 @@ import useSWR from 'swr';
 import { getFunds, addFund as serverAddFund, deleteFund as serverDeleteFund } from '@/actions/funds';
 import { useCallback } from 'react';
 
-export function useFunds(seasonId?: string | null) {
+export function useFunds(seasonId?: string | null, forReport?: boolean) {
   const { data: allFunds, mutate } = useSWR(
-    seasonId ? ['funds', seasonId] : null, 
-    ([_, sid]) => getFunds(sid as string)
+    seasonId ? ['funds', seasonId, forReport] : null, 
+    ([_, sid, report]) => getFunds(sid as string, report as boolean)
   );
   
   const funds = allFunds || [];

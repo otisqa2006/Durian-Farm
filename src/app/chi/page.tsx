@@ -21,8 +21,11 @@ export default function ChiPage() {
   const { expenseTransactions, totalExpense, addTransaction, addMultipleTransactions, updateTransaction, removeTransaction } = useTransactions(undefined, selectedSeasonId);
   const { funds } = useFunds(selectedSeasonId);
 
+  const now = new Date();
+  
   // View state
   const [selectedViewFundId, setSelectedViewFundId] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<string>(now.getMonth().toString());
 
   useEffect(() => {
     if (funds.length > 0 && !selectedViewFundId) {
@@ -41,9 +44,16 @@ export default function ChiPage() {
 
   const displayedTransactions = useMemo(() => {
     if (!selectedViewFundId) return [];
-    if (isMasterFund) return expenseTransactions; // Quỹ tổng xem được tất cả
-    return expenseTransactions.filter((t) => t.fundId === selectedViewFundId);
-  }, [expenseTransactions, selectedViewFundId, isMasterFund]);
+    
+    let txns = isMasterFund ? expenseTransactions : expenseTransactions.filter((t) => t.fundId === selectedViewFundId);
+    
+    if (selectedMonth !== 'all') {
+      const m = parseInt(selectedMonth, 10);
+      txns = txns.filter((t) => new Date(t.date).getMonth() === m);
+    }
+    
+    return txns;
+  }, [expenseTransactions, selectedViewFundId, isMasterFund, selectedMonth]);
 
   const displayedTotalExpense = useMemo(() => {
     return displayedTransactions.reduce((sum, t) => sum + t.amount, 0);
@@ -287,28 +297,25 @@ export default function ChiPage() {
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      {/* ── Header ─────────────────────────────────── */}
+      {/* ── Action Bar ─────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 rounded-xl gradient-danger">
-              <TrendingDown className="w-6 h-6 text-white" />
-            </div>
-            Quản lý Dòng Chi
-          </h1>
           {!isSeasonActive && (
-            <p className="text-warning text-xs mt-2 bg-warning/10 inline-block px-2 py-1 rounded">
-              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
-            </p>
+            <div className="bg-warning/10 border border-warning/20 text-warning px-4 py-3 rounded-xl flex items-start gap-3">
+              <div className="text-sm">
+                <p className="font-bold">Mùa vụ đã lưu trữ</p>
+                <p className="opacity-90">Bạn đang xem dữ liệu của một mùa vụ đã kết thúc. Không thể chỉnh sửa.</p>
+              </div>
+            </div>
           )}
-          {isSeasonActive && <p className="text-muted mt-1 text-sm">Ghi nhận và theo dõi các khoản chi tiêu</p>}
         </div>
         
-        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
-          <div className="relative inline-flex">
-            <div className="btn btn-secondary flex items-center justify-between min-w-[140px] pointer-events-none pr-9">
+        <div className="flex flex-wrap sm:flex-nowrap items-stretch sm:items-center justify-end gap-3 w-full sm:w-auto">
+          {/* Fund Filter */}
+          <div className="relative inline-flex w-full sm:w-auto">
+            <div className="btn btn-secondary flex items-center justify-between w-full sm:min-w-[140px] pointer-events-none pr-9">
               <div className="flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-muted" />
+                <Wallet className="w-4 h-4 text-muted shrink-0" />
                 <span className="truncate max-w-[120px]">{selectedViewFund?.name || 'Chọn quỹ'} {isMasterFund && '(Tổng)'}</span>
               </div>
               <ChevronDown className="w-4 h-4 text-muted absolute right-3" />
@@ -326,8 +333,33 @@ export default function ChiPage() {
             </select>
           </div>
 
+          {/* Month Filter */}
+          <div className="relative inline-flex w-full sm:w-auto">
+            <div className="btn btn-secondary flex items-center justify-between w-full sm:min-w-[140px] pointer-events-none pr-9">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted shrink-0" />
+                <span className="truncate max-w-[120px]">
+                  {selectedMonth === 'all' ? 'Tất cả tháng' : `Tháng ${parseInt(selectedMonth) + 1}`}
+                </span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-muted absolute right-3" />
+            </div>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            >
+              <option value="all" className="bg-card text-white">Tất cả tháng</option>
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i} value={i.toString()} className="bg-card text-white">
+                  Tháng {i + 1}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {canEdit && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <button 
                 onClick={(e) => {
                   if (isMasterFund) { e.preventDefault(); return; }
@@ -337,7 +369,7 @@ export default function ChiPage() {
                   } else if (funds.length > 0) setFundId(funds[0].id);
                   setIsBulkModalOpen(true);
                 }} 
-                className={`btn btn-secondary whitespace-nowrap ${isMasterFund ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                className={`btn btn-secondary flex-1 sm:flex-none whitespace-nowrap justify-center ${isMasterFund ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                 disabled={isMasterFund}
                 aria-disabled={isMasterFund}
               >
@@ -349,12 +381,12 @@ export default function ChiPage() {
                   if (isMasterFund) { e.preventDefault(); return; }
                   handleOpenModal();
                 }} 
-                className={`btn btn-primary whitespace-nowrap ${isMasterFund ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                className={`btn btn-primary flex-1 sm:flex-none whitespace-nowrap justify-center gap-2 ${isMasterFund ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
                 disabled={isMasterFund}
                 aria-disabled={isMasterFund}
               >
-                <Plus className="w-4 h-4 hidden sm:block" />
-                Thêm khoản chi
+                <Plus className="w-4 h-4 shrink-0" />
+                Thêm
               </button>
             </div>
           )}

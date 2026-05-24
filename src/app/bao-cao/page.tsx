@@ -94,8 +94,8 @@ export default function BaoCaoPage() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
 
-  const { transactions } = useTransactions(undefined, selectedSeasonId);
-  const { funds } = useFunds(selectedSeasonId);
+  const { transactions } = useTransactions(undefined, selectedSeasonId, true);
+  const { funds } = useFunds(selectedSeasonId, true);
 
   if (!canView) {
     return (
@@ -275,20 +275,8 @@ export default function BaoCaoPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ========== Header ========== */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-info flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-white" />
-            </div>
-            Báo cáo tài chính
-          </h1>
-          <p className="text-muted text-sm mt-1">
-            Phân tích dòng tiền và xu hướng thu chi
-          </p>
-        </div>
-
+      {/* ========== Action Bar ========== */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
         {/* Period Selector */}
         <div className="flex items-center gap-3">
           <div className="relative">

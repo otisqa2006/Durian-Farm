@@ -44,7 +44,7 @@ export default function Sidebar() {
           <Sprout className="w-5 h-5 text-white" />
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-bold text-white tracking-tight">SRM Finance</span>
+          <span className="text-sm font-bold text-white tracking-tight">OM Farm</span>
           <span className="text-[10px] text-muted leading-none">Quản lý Thu Chi</span>
         </div>
       </div>
@@ -124,7 +124,7 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="px-4 py-4 border-t border-border/50">
         <div className="text-[11px] text-muted text-center">
-          SRM Finance v1.0
+          OM Farm v1.0
         </div>
       </div>
     </aside>

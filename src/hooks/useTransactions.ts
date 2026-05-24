@@ -5,10 +5,10 @@ import { getTransactions, addTransaction as serverAddTransaction, addTransaction
 import type { Transaction, TransactionType, IncomeCategory, ExpenseCategory, Grade } from '@/types';
 import { useCallback } from 'react';
 
-export function useTransactions(fundId?: string, seasonId?: string | null) {
+export function useTransactions(fundId?: string, seasonId?: string | null, forReport?: boolean) {
   const { data: allTransactions, mutate } = useSWR(
-    seasonId ? ['transactions', seasonId] : null,
-    ([_, sid]) => getTransactions(sid as string)
+    seasonId ? ['transactions', seasonId, forReport] : null,
+    ([_, sid, report]) => getTransactions(sid as string, report as boolean)
   );
   
   let transactions = allTransactions || [];

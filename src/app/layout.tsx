@@ -4,13 +4,13 @@ import AppShell from "@/components/layout/AppShell";
 import { AppProvider } from "@/providers/AppProvider";
 
 export const metadata: Metadata = {
-  title: "SRM Finance — Quản lý Thu Chi Rẫy Sầu Riêng",
+  title: "OM Farm - Quản lý Thu Chi Rẫy Sầu Riêng",
   description: "Ứng dụng quản lý tài chính nội bộ cho rẫy sầu riêng. Theo dõi dòng thu, dòng chi, quỹ phân tương và công nợ.",
   keywords: ["sầu riêng", "quản lý tài chính", "thu chi", "rẫy"],
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "SRM Finance",
+    title: "OM Farm",
   },
   formatDetection: {
     telephone: false,

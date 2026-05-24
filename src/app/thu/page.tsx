@@ -143,14 +143,16 @@ export default function ThuPage() {
   // ──────────────────────────────────────────────────
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ── Header ─────────────────────────────────── */}
+      {/* ── Action Bar ─────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Quản lý Dòng Thu</h1>
           {!isSeasonActive && (
-            <p className="text-warning text-xs mt-1 bg-warning/10 inline-block px-2 py-1 rounded">
-              Đang xem dữ liệu của mùa vụ lưu trữ. Không thể chỉnh sửa.
-            </p>
+            <div className="bg-warning/10 border border-warning/20 text-warning px-4 py-3 rounded-xl flex items-start gap-3">
+              <div className="text-sm">
+                <p className="font-bold">Mùa vụ đã lưu trữ</p>
+                <p className="opacity-90">Bạn đang xem dữ liệu của một mùa vụ đã kết thúc. Không thể chỉnh sửa.</p>
+              </div>
+            </div>
           )}
         </div>
         {canEdit && (

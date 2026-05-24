@@ -235,12 +235,8 @@ export default function DebtManagementPage() {
   // ================================================================
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ─── Header ─────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Quản lý Công nợ</h1>
-          <p className="text-muted text-sm mt-1">Theo dõi nợ ngân hàng và nợ ngoài</p>
-        </div>
+      {/* 🌟🌟🌟 Action Bar 🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟 */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
         <button onClick={openAddModal} className="btn btn-primary">
           <Plus className="w-4 h-4" />
           Thêm khoản nợ

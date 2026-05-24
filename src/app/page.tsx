@@ -35,16 +35,19 @@ function KPICard({
   gradientClass: string;
 }) {
   return (
-    <div className="glass-card p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted font-medium">{label}</span>
+    <div className="glass-card p-3 sm:p-5 flex flex-col gap-2 sm:gap-3 overflow-hidden">
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-[11px] sm:text-sm text-muted font-medium line-clamp-1">{label}</span>
         <div
-          className={`${gradientClass} w-10 h-10 rounded-xl flex items-center justify-center shadow-lg`}
+          className={`${gradientClass} w-7 h-7 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-lg shrink-0`}
         >
-          <Icon className="w-5 h-5 text-white" />
+          <Icon className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
         </div>
       </div>
-      <p className="text-2xl font-bold font-mono-num tracking-tight text-white">
+      <p 
+        className="text-base sm:text-2xl font-bold font-mono-num tracking-tight text-white truncate"
+        title={formatCurrency(amount)}
+      >
         {formatCurrency(amount)}
       </p>
     </div>
@@ -83,14 +86,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ── Page Header ── */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Tổng quan</h1>
-        <p className="text-muted text-sm mt-1">
-          {currentMonth} {now.getFullYear()} — SRM Finance
-        </p>
-      </div>
-
       {/* Season Warning */}
       {selectedSeasonId && activeSeasonId && selectedSeasonId !== activeSeasonId && (
         <div className="bg-warning/20 border border-warning/50 text-warning px-4 py-3 rounded-xl flex items-center gap-3">
@@ -99,8 +94,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 stagger-children">
+      {/* 🌟 KPI Cards 🌟 */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 stagger-children">
         <KPICard
           label="Tổng tồn quỹ"
           amount={totalBalance}
@@ -209,18 +204,16 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Bottom Grid: Recent Transactions + Fund Distribution ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Transactions — 2/3 */}
-        <div className="lg:col-span-2 glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ReceiptText className="w-5 h-5 text-muted" />
-              <h2 className="text-lg font-semibold text-white">
-                Giao dịch gần đây
-              </h2>
-            </div>
-            <Link
+      {/* 🌟 Bottom: Recent Transactions 🌟 */}
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ReceiptText className="w-5 h-5 text-muted" />
+            <h2 className="text-lg font-semibold text-white">
+              Giao dịch gần đây
+            </h2>
+          </div>
+          <Link
               href="/thu"
               className="btn btn-ghost btn-sm text-sm text-primary-light hover:text-primary flex items-center gap-1"
             >
@@ -282,71 +275,6 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
-        </div>
-
-        {/* Fund Distribution — 1/3 */}
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <PieChart className="w-5 h-5 text-muted" />
-            <h2 className="text-lg font-semibold text-white">Phân bổ quỹ</h2>
-          </div>
-
-          {funds.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Wallet className="w-12 h-12 text-muted/30 mb-3" />
-              <p className="text-muted text-sm">Chưa có quỹ nào</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {funds.map((fund, idx) => {
-                const pct =
-                  totalBalance > 0
-                    ? (fund.balance / totalBalance) * 100
-                    : 0;
-                const color = CHART_COLORS[idx % CHART_COLORS.length];
-
-                return (
-                  <div key={fund.id}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-sm shrink-0"
-                          style={{ backgroundColor: color }}
-                        />
-                        <span className="text-sm text-white truncate max-w-[140px]">
-                          {fund.name}
-                        </span>
-                      </div>
-                      <span className="text-sm font-mono-num text-muted">
-                        {formatCurrency(fund.balance)}
-                      </span>
-                    </div>
-                    {/* Bar */}
-                    <div className="w-full h-2 rounded-full bg-surface/80 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.max(pct, fund.balance > 0 ? 2 : 0)}%`,
-                          backgroundColor: color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Total footer */}
-              <div className="pt-3 mt-2 border-t border-border/30 flex items-center justify-between">
-                <span className="text-sm font-medium text-muted">
-                  Tổng cộng
-                </span>
-                <span className="text-sm font-bold font-mono-num text-white">
-                  {formatCurrency(totalBalance)}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { supabase } from '@/lib/supabase';
 import { getSession } from './auth';
 
-export async function getFunds(seasonId?: string) {
+export async function getFunds(seasonId?: string, forReport?: boolean) {
   const session = await getSession();
   if (!session) return [];
 
@@ -20,16 +20,10 @@ export async function getFunds(seasonId?: string) {
 
     let query = supabase.from('funds').select('*').eq('season_id', targetSeasonId);
     
-    // Nếu không phải admin, chỉ lấy quỹ được phân quyền
-    if (session.role !== 'admin') {
-      const { data: userFunds } = await supabase
-        .from('user_funds')
-        .select('fund_id')
-        .eq('user_id', session.id);
-        
-      if (!userFunds || userFunds.length === 0) return [];
-      const fundIds = userFunds.map(uf => uf.fund_id);
-      query = query.in('id', fundIds);
+    // Nếu không phải admin và không phải đang xem báo cáo (hoặc xem báo cáo nhưng k có quyền xem tất cả), chỉ lấy quỹ được gán (holder_id)
+    const isReportMode = forReport && session.permissions?.can_view_baocao;
+    if (session.role !== 'admin' && !isReportMode) {
+      query = query.eq('holder_id', session.id);
     }
 
     const { data, error } = await query;

@@ -7,7 +7,11 @@ export async function getUsers() {
   const session = await getSession();
   if (!session || session.role !== 'admin') return [];
 
-  const { data, error } = await supabase.from('users').select('id, username, role, can_manage_thu, can_manage_chi, can_manage_quy, can_view_baocao');
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, username, role, can_manage_thu, can_manage_chi, can_manage_quy, can_view_baocao')
+    .order('role', { ascending: true })
+    .order('username', { ascending: true });
   if (error) return [];
   
   return data.map(u => ({

@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { getSession } from './auth';
 import { Transaction } from '@/types';
 
-export async function getTransactions(seasonId?: string) {
+export async function getTransactions(seasonId?: string, forReport?: boolean) {
   const session = await getSession();
   if (!session) return [];
 
@@ -17,20 +17,12 @@ export async function getTransactions(seasonId?: string) {
       targetSeasonId = activeSeason.id;
     }
 
-    let query = supabase.from('transactions').select('*, funds!inner(is_master, season_id)').eq('funds.season_id', targetSeasonId).order('transaction_date', { ascending: false });
+    let query = supabase.from('transactions').select('*, funds!inner(is_master, season_id, holder_id)').eq('funds.season_id', targetSeasonId).order('transaction_date', { ascending: false });
     
-    if (session.role !== 'admin') {
-      const { data: userFunds } = await supabase
-        .from('user_funds')
-        .select('fund_id, funds!inner(is_master)')
-        .eq('user_id', session.id);
-        
-      if (!userFunds || userFunds.length === 0) return [];
-      
-      const hasMaster = userFunds.some((uf: any) => uf.funds?.is_master === true);
-      if (!hasMaster) {
-        query = query.in('fund_id', userFunds.map(uf => uf.fund_id));
-      }
+    // Nếu không phải admin và không đang ở trang báo cáo, chỉ lấy các giao dịch thuộc quỹ mà user đó đang giữ
+    const isReportMode = forReport && session.permissions?.can_view_baocao;
+    if (session.role !== 'admin' && !isReportMode) {
+      query = query.eq('funds.holder_id', session.id);
     }
 
     const { data, error } = await query;

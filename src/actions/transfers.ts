@@ -20,12 +20,12 @@ export async function getTransfers(seasonId?: string) {
     
     if (session.role !== 'admin') {
       const { data: userFunds } = await supabase
-        .from('user_funds')
-        .select('fund_id')
-        .eq('user_id', session.id);
+        .from('funds')
+        .select('id')
+        .eq('holder_id', session.id);
         
       if (!userFunds || userFunds.length === 0) return [];
-      const fundIds = userFunds.map(uf => uf.fund_id);
+      const fundIds = userFunds.map(uf => uf.id);
       
       // Transfers involving the user's funds
       query = query.or(`from_fund_id.in.(${fundIds.join(',')}),to_fund_id.in.(${fundIds.join(',')})`);
